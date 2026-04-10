@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../agent" },
+    { "path": "../core" },
+    { "path": "../storage" },
+    { "path": "../skills/jira" },
+    { "path": "../skills/refine" },
+    { "path": "../skills/code" },
+    { "path": "../skills/n8n" },
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@jarvis/skills-refine",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json",
+    "test": "vitest run",
+    "dev": "tsc -p tsconfig.lib.json --watch"
+  },
+  "dependencies": {
+    "@jarvis/core": "workspace:*",
+    "@jarvis/storage": "workspace:*"
+  }
+}

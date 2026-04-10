@@ -1,0 +1,77 @@
+import type BetterSqlite3 from "better-sqlite3";
+import { initDatabase } from "./database.js";
+import { createCognitiveRepo } from "./repositories/cognitive.js";
+import { createIntegrationsRepo } from "./repositories/integrations.js";
+import { createKnowledgeRepo } from "./repositories/knowledge.js";
+import { createOutputsRepo } from "./repositories/outputs.js";
+import { createProjectsRepo } from "./repositories/projects.js";
+import { createRulesRepo } from "./repositories/rules.js";
+import { createSessionsRepo } from "./repositories/sessions.js";
+import { createStackRepo } from "./repositories/stack.js";
+import { createToolExecutionsRepo } from "./repositories/tool-executions.js";
+import { seedDatabase } from "./seed.js";
+
+// Re-export all types
+export type {
+  CognitiveBase,
+  CreateProjectInput,
+  Message,
+  Output,
+  Project,
+  ProjectContext,
+  ProjectIntegration,
+  ProjectKnowledge,
+  ProjectRule,
+  ProjectStack,
+  SaveOutputInput,
+  Session,
+  ToolExecution,
+} from "./types.js";
+
+// Re-export database initializer
+export { initDatabase } from "./database.js";
+export { seedDatabase } from "./seed.js";
+
+// ---------------------------------------------------------------------------
+// Storage type
+// ---------------------------------------------------------------------------
+
+export interface Storage {
+  db: BetterSqlite3.Database;
+  cognitive: ReturnType<typeof createCognitiveRepo>;
+  projects: ReturnType<typeof createProjectsRepo>;
+  stack: ReturnType<typeof createStackRepo>;
+  rules: ReturnType<typeof createRulesRepo>;
+  integrations: ReturnType<typeof createIntegrationsRepo>;
+  knowledge: ReturnType<typeof createKnowledgeRepo>;
+  sessions: ReturnType<typeof createSessionsRepo>;
+  outputs: ReturnType<typeof createOutputsRepo>;
+  toolExecutions: ReturnType<typeof createToolExecutionsRepo>;
+  seed: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Initialize the SQLite database and return a fully wired storage object
+ * with all repositories ready to use.
+ */
+export function createStorage(dbPath: string): Storage {
+  const db = initDatabase(dbPath);
+
+  return {
+    db,
+    cognitive: createCognitiveRepo(db),
+    projects: createProjectsRepo(db),
+    stack: createStackRepo(db),
+    rules: createRulesRepo(db),
+    integrations: createIntegrationsRepo(db),
+    knowledge: createKnowledgeRepo(db),
+    sessions: createSessionsRepo(db),
+    outputs: createOutputsRepo(db),
+    toolExecutions: createToolExecutionsRepo(db),
+    seed: () => seedDatabase(db),
+  };
+}

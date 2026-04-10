@@ -1,0 +1,46 @@
+{
+  "name": "@jarvis/monorepo",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "build": "nx run-many --target=build --all",
+    "dev": "nx run @jarvis/cli:dev",
+    "test": "nx run-many --target=test --all",
+    "lint": "nx run-many --target=lint --all",
+    "jarvis": "node packages/cli/dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@inquirer/prompts": "^7.0.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.8.1",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "marked": "^15.0.0",
+    "marked-terminal": "^7.3.0",
+    "ora": "^8.2.0",
+    "tslib": "^2.3.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@nx/js": "22.6.2",
+    "@swc-node/register": "1.11.1",
+    "@swc/core": "1.15.8",
+    "@swc/helpers": "0.5.18",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.17.0",
+    "@types/uuid": "^10.0.0",
+    "nx": "22.6.2",
+    "prettier": "^2.6.2",
+    "typescript": "~5.9.2",
+    "vitest": "^3.1.1"
+  },
+  "pnpm": {
+    "overrides": {},
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  }
+}

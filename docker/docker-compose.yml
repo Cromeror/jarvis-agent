@@ -1,0 +1,29 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - N8N_SECURE_COOKIE=false
+      - N8N_PUBLIC_API_DISABLED=false
+    volumes:
+      - n8n-data:/home/node/.n8n
+    restart: unless-stopped
+
+  jarvis-mcp:
+    build:
+      context: ../packages/mcp
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      - n8n
+    env_file:
+      - ../.env
+    restart: unless-stopped
+
+volumes:
+  n8n-data:
