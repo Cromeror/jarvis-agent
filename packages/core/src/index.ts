@@ -25,6 +25,8 @@ export { ContextResolver } from './context-resolver.js';
 export { resolveRulesForTool } from './rule-injector.js';
 export { verifyN8n } from './n8n-verifier.js';
 export type { N8nAvailability } from './n8n-verifier.js';
+export { ensureWorkflow } from './n8n-workflow-ensurer.js';
+export type { EnsureWorkflowOptions, EnsureWorkflowResult } from './n8n-workflow-ensurer.js';
 
 export type {
   AIProvider,

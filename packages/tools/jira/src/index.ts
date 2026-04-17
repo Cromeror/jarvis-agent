@@ -1,7 +1,33 @@
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import type { Skill, ToolDefinition } from '@jarvis/core';
-import { resolveRulesForTool, verifyN8n } from '@jarvis/core';
+import { resolveRulesForTool, verifyN8n, ensureWorkflow } from '@jarvis/core';
 import type { Storage } from '@jarvis/storage';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function loadWorkflowJson(name: string): {
+  name: string;
+  nodes: unknown[];
+  connections: unknown;
+  settings?: unknown;
+} {
+  // dist/ lives one level below src/ in the built package, so ../workflows works for both
+  const candidates = [
+    resolve(__dirname, '..', 'workflows', `${name}.json`),
+    resolve(__dirname, 'workflows', `${name}.json`),
+  ];
+  for (const path of candidates) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf-8'));
+    } catch {
+      // try next
+    }
+  }
+  throw new Error(`Workflow JSON not found: ${name}.json`);
+}
 
 const tools: ToolDefinition[] = [
   {
@@ -147,6 +173,29 @@ async function analyzeTicketViaN8n(
       'Configuralo con:',
       `  jarvis integration set ${projectId} jira --site <site> --email <email>`,
     ].join('\n');
+  }
+
+  // Ensure the n8n workflow exists (lazy single-shot init)
+  const n8nConfig = storage.integrations.getConfig<{ url: string; api_key: string }>(projectId, 'n8n');
+  const ensureResult = await ensureWorkflow({
+    n8nUrl: availability.url,
+    apiKey: n8nConfig?.api_key || null,
+    workflowName: 'jira-analyze-ticket',
+    workflowJson: loadWorkflowJson('jira-analyze-ticket'),
+  });
+
+  if (ensureResult.status === 'error') {
+    return [
+      '⚠ No pude asegurar que el workflow "jira-analyze-ticket" este disponible.',
+      '',
+      ensureResult.message,
+    ].join('\n');
+  }
+
+  if (ensureResult.status === 'created') {
+    console.error(`⏳ Workflow "jira-analyze-ticket" no existia en n8n, creado y activado (id: ${ensureResult.id})`);
+  } else if (ensureResult.status === 'activated') {
+    console.error(`⏳ Workflow "jira-analyze-ticket" existia pero estaba inactivo, activado (id: ${ensureResult.id})`);
   }
 
   const webhookUrl = `${availability.url}/webhook/jira-analyze-ticket`;

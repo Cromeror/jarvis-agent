@@ -19,6 +19,7 @@ import { setupCommand } from './commands/setup.js';
 import { aiSetup, aiStatus, aiList, aiActivate, aiSet, aiTest } from './commands/ai.js';
 import { toolList, toolRun, toolHelp } from './commands/tool.js';
 import { doctorCommand } from './commands/doctor.js';
+import { n8nExport } from './commands/n8n.js';
 
 const program = new Command();
 
@@ -44,6 +45,17 @@ program
     const config = loadConfig();
     const { storage } = bootstrap(config);
     await doctorCommand(storage, config);
+  });
+
+// n8n utilities
+const n8n = program.command('n8n').description('n8n workflow utilities');
+n8n.command('export <workflow-name>')
+  .description('Export a workflow from n8n to the local repo as JSON')
+  .option('-o, --output <path>', 'Output path (defaults to packages/tools/<tool>/workflows/<name>.json)')
+  .action(async (workflowName: string, opts: { output?: string }) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    await n8nExport(storage, workflowName, opts.output);
   });
 
 // Chat

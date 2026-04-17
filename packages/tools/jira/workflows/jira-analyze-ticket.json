@@ -1,0 +1,108 @@
+{
+  "name": "Jira - Analyze Ticket",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jira-analyze-ticket",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "jira-analyze-ticket"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3100/api/exec/jira",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ site: $json.body.site, email: $json.body.email, action: \"get_ticket\", params: { ticket_id: $json.body.ticketId } }) }}",
+        "options": {}
+      },
+      "id": "http-1",
+      "name": "Exec ACLI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        430,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const exec = $input.first().json;\nif (!exec.success) {\n  return [{ json: { toon: `error: ${exec.error || \"unknown\"}` } }];\n}\n\nconst raw = exec.output || \"\";\nconst lines = raw.split(\"\\n\");\n\n// Noise lines from `acli jira auth switch` output that must not pollute the ticket TOON\nconst NOISE_KEYS = new Set([\n  \"authenticated_site\",\n  \"switched_to_account\",\n  \"authentication_type\",\n  \"email\",\n  \"token\",\n  \"site\"\n]);\nconst NOISE_PREFIXES = [\"✓\", \"✗\", \"⚠\"];\n\nconst data = {};\nfor (const line of lines) {\n  const trimmed = line.trim();\n  if (!trimmed) continue;\n  if (NOISE_PREFIXES.some(p => trimmed.startsWith(p))) continue;\n\n  const m = line.match(/^([A-Za-z][A-Za-z0-9_ ]*)\\s*:\\s*(.+)$/);\n  if (!m) continue;\n\n  const key = m[1].trim().toLowerCase().replace(/\\s+/g, \"_\");\n  if (NOISE_KEYS.has(key)) continue;\n\n  data[key] = m[2].trim();\n}\n\nconst toonLines = [];\nfor (const [k, v] of Object.entries(data)) {\n  const needsQuotes = /[,:\\n]/.test(v);\n  toonLines.push(`${k}: ${needsQuotes ? `\"${v.replace(/\"/g, \"\\\\\\\"\")}\"` : v}`);\n}\n\nif (toonLines.length === 0) {\n  toonLines.push(`raw: \"${raw.replace(/\"/g, \"\\\\\\\"\").replace(/\\n/g, \"\\\\n\")}\"`);\n}\n\nreturn [{ json: { toon: toonLines.join(\"\\n\") } }];"
+      },
+      "id": "code-1",
+      "name": "Format TOON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.toon }}",
+        "options": {}
+      },
+      "id": "respond-1",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        890,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Exec ACLI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec ACLI": {
+      "main": [
+        [
+          {
+            "node": "Format TOON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format TOON": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}
