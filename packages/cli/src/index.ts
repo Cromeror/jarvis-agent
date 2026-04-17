@@ -18,6 +18,7 @@ import { baseShow, baseEdit, baseSync } from './commands/base.js';
 import { setupCommand } from './commands/setup.js';
 import { aiSetup, aiStatus, aiList, aiActivate, aiSet, aiTest } from './commands/ai.js';
 import { toolList, toolRun, toolHelp } from './commands/tool.js';
+import { doctorCommand } from './commands/doctor.js';
 
 const program = new Command();
 
@@ -33,6 +34,16 @@ program
   .action(() => {
     const config = loadConfig();
     setupCommand(config);
+  });
+
+// Doctor — checks prerequisites and health
+program
+  .command('doctor')
+  .description('Verify JARVIS prerequisites and report health status')
+  .action(async () => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    await doctorCommand(storage, config);
   });
 
 // Chat
