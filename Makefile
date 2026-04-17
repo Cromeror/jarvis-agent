@@ -22,7 +22,7 @@ http-gateway:
 	node packages/http-gateway/dist/index.js
 
 clean:
-	rm -rf packages/*/dist packages/tools/*/dist data/jarvis.db
+	rm -rf packages/*/dist packages/tools/*/dist
 
 docker-up:
 	docker compose -f docker/docker-compose.yml up -d

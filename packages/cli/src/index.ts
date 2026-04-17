@@ -20,6 +20,7 @@ import { aiSetup, aiStatus, aiList, aiActivate, aiSet, aiTest } from './commands
 import { toolList, toolRun, toolHelp } from './commands/tool.js';
 import { doctorCommand } from './commands/doctor.js';
 import { n8nExport } from './commands/n8n.js';
+import { mcpInstall, mcpUpdate, mcpUninstall, mcpStatus, mcpSync } from './commands/mcp.js';
 
 const program = new Command();
 
@@ -43,8 +44,8 @@ program
   .description('Verify JARVIS prerequisites and report health status')
   .action(async () => {
     const config = loadConfig();
-    const { storage } = bootstrap(config);
-    await doctorCommand(storage, config);
+    const { storage, toolRegistry } = bootstrap(config);
+    await doctorCommand(storage, toolRegistry, config);
   });
 
 // n8n utilities
@@ -305,5 +306,51 @@ base.command('sync').description('Sync cognition.md to database').action(() => {
   const { storage } = bootstrap(config);
   baseSync(storage, config.cognitiveBasePath);
 });
+
+// MCP registration commands — manage Jarvis as an MCP server for Claude Code
+const mcp = program.command('mcp').description('Manage Jarvis as an MCP server for Claude Code');
+
+mcp.command('install')
+  .description('Build and register Jarvis MCP in Claude Code')
+  .option('-s, --scope <scope>', 'Registration scope: user | local | project', 'user')
+  .option('-e, --env <kv...>', 'Extra env var(s) as KEY=VALUE (can repeat)')
+  .option('--skip-build', 'Skip rebuilding @jarvis/mcp before registering')
+  .action((opts: { scope?: 'user' | 'local' | 'project'; env?: string[]; skipBuild?: boolean }) => {
+    mcpInstall(opts);
+  });
+
+mcp.command('update')
+  .description('Rebuild @jarvis/mcp and re-register it in Claude Code')
+  .option('-s, --scope <scope>', 'Registration scope: user | local | project', 'user')
+  .option('-e, --env <kv...>', 'Extra env var(s) as KEY=VALUE (can repeat)')
+  .action((opts: { scope?: 'user' | 'local' | 'project'; env?: string[] }) => {
+    mcpUpdate(opts);
+  });
+
+mcp.command('uninstall')
+  .description('Remove Jarvis MCP registration from Claude Code')
+  .option('-s, --scope <scope>', 'Scope to remove from: user | local | project', 'user')
+  .action((opts: { scope?: 'user' | 'local' | 'project' }) => {
+    mcpUninstall(opts.scope ?? 'user');
+  });
+
+mcp.command('status')
+  .description('Show Jarvis MCP registration status')
+  .action(() => {
+    mcpStatus();
+  });
+
+mcp.command('sync')
+  .description('Sync Jarvis instruction block in CLAUDE.md (user scope by default)')
+  .option('--project', 'Write to ./CLAUDE.md in the current directory instead of ~/.claude/CLAUDE.md')
+  .option('--project-id <id>', 'Pin a specific Jarvis project_id (only with --project)')
+  .option('--dry-run', 'Show what would change without writing')
+  .option('--check', 'Exit non-zero if the block is out of sync; do not write')
+  .option('--force', 'Overwrite even if duplicate/malformed blocks are detected')
+  .action((opts: { project?: boolean; projectId?: string; dryRun?: boolean; check?: boolean; force?: boolean }) => {
+    const config = loadConfig();
+    const { storage, toolRegistry } = bootstrap(config);
+    mcpSync(storage, toolRegistry, opts);
+  });
 
 program.parse();

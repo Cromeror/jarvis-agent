@@ -2,7 +2,10 @@ import chalk from 'chalk';
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import type { Storage } from '@jarvis/storage';
+import type { ToolRegistry } from '@jarvis/core';
 import type { CliConfig } from '../config.js';
+import { mcpCheckDrift } from './mcp.js';
+import { homedir } from 'node:os';
 
 interface CheckResult {
   name: string;
@@ -17,7 +20,11 @@ const REQUIRED_WORKFLOWS = [
   'jira-analyze-ticket',
 ];
 
-export async function doctorCommand(storage: Storage, config: CliConfig): Promise<void> {
+export async function doctorCommand(
+  storage: Storage,
+  toolRegistry: ToolRegistry,
+  config: CliConfig
+): Promise<void> {
   console.log(chalk.bold('\n🔍 JARVIS Doctor\n'));
 
   const results: CheckResult[] = [];
@@ -31,6 +38,7 @@ export async function doctorCommand(storage: Storage, config: CliConfig): Promis
   results.push(...(await checkN8nWorkflows(storage)));
   results.push(checkAcli());
   results.push(checkDocker());
+  results.push(checkMcpInstructions(storage, toolRegistry));
 
   // Render
   for (const r of results) {
@@ -274,4 +282,35 @@ function resolveN8nApiKey(storage: Storage): string | null {
     if (cfg?.api_key) return cfg.api_key;
   }
   return null;
+}
+
+function checkMcpInstructions(storage: Storage, toolRegistry: ToolRegistry): CheckResult {
+  try {
+    const drifts = mcpCheckDrift(storage, toolRegistry);
+    if (drifts.length === 0) {
+      return {
+        name: 'MCP instructions',
+        status: 'warn',
+        message: 'No ~/.claude/CLAUDE.md found',
+        hint: 'Run: jarvis mcp sync',
+      };
+    }
+    const outOfSync = drifts.filter((d) => d.drift);
+    if (outOfSync.length === 0) {
+      return { name: 'MCP instructions', status: 'ok', message: 'Instruction block up to date' };
+    }
+    const paths = outOfSync.map((d) => d.path.replace(homedir(), '~')).join(', ');
+    return {
+      name: 'MCP instructions',
+      status: 'warn',
+      message: `Drift detected: ${paths}`,
+      hint: 'Run: jarvis mcp sync',
+    };
+  } catch (err) {
+    return {
+      name: 'MCP instructions',
+      status: 'warn',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
 }

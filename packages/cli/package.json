@@ -8,6 +8,10 @@
   "bin": {
     "jarvis": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "assets"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",

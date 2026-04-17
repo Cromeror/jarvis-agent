@@ -1,6 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { resolve } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { createStorage } from '@jarvis/storage';
 import { ToolRegistry } from '@jarvis/core';
 import { JarvisAgent } from '@jarvis/agent';
@@ -10,8 +13,22 @@ import { createRefineSkill } from '@jarvis/tools-refine';
 import { createCodeSkill } from '@jarvis/tools-code';
 import { createN8nSkill } from '@jarvis/tools-n8n';
 
+// Mirror of resolveJarvisHome() from @jarvis/cli — the MCP package cannot depend
+// on the CLI package, so we duplicate this small function. Keep both in sync.
+function resolveJarvisHome(): string {
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || resolve(homedir(), 'AppData', 'Roaming');
+    return resolve(appData, 'jarvis');
+  }
+  return resolve(homedir(), '.jarvis');
+}
+
 export async function startServer(): Promise<void> {
-  const dbPath = process.env.JARVIS_DB_PATH || './data/jarvis.db';
+  const jarvisHome = resolveJarvisHome();
+  if (!existsSync(jarvisHome)) {
+    mkdirSync(jarvisHome, { recursive: true });
+  }
+  const dbPath = resolve(jarvisHome, 'jarvis.db');
   const storage = createStorage(dbPath);
 
   const toolRegistry = new ToolRegistry();
