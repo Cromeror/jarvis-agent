@@ -17,6 +17,7 @@ import { integrationList, integrationSet, integrationRemove } from './commands/i
 import { baseShow, baseEdit, baseSync } from './commands/base.js';
 import { setupCommand } from './commands/setup.js';
 import { aiSetup, aiStatus, aiList, aiActivate, aiSet, aiTest } from './commands/ai.js';
+import { toolList, toolRun, toolHelp } from './commands/tool.js';
 
 const program = new Command();
 
@@ -152,6 +153,53 @@ stack.command('remove <stack-id>').description('Remove a stack entry by ID').act
   const { storage } = bootstrap(config);
   await stackRemove(storage, stackId);
 });
+
+// Tool commands — invoke tools directly without the AI agent loop
+const tool = program.command('tool').description('Invoke JARVIS tools directly');
+tool.command('list').description('List all available tools').action(() => {
+  const config = loadConfig();
+  const { toolRegistry } = bootstrap(config);
+  toolList(toolRegistry);
+});
+tool.command('help <tool-name>').description('Show usage help for a specific tool').action((toolName: string) => {
+  const config = loadConfig();
+  const { toolRegistry } = bootstrap(config);
+  toolHelp(toolRegistry, toolName);
+});
+tool.command('run <tool-name>')
+  .description('Run a tool with JSON input. Example: jarvis tool run jira_analyze_ticket --input \'{"ticket_id":"LXM-473","project_id":"lx"}\'')
+  .option('-i, --input <json>', 'Tool input as JSON string')
+  .option('-p, --param <key=value...>', 'Input param (can be used multiple times, e.g. -p ticket_id=LXM-473 -p project_id=lx)')
+  .allowUnknownOption()
+  .action(async (toolName: string, opts: { input?: string; param?: string[] }) => {
+    const config = loadConfig();
+    const { toolRegistry } = bootstrap(config);
+
+    const inputs: Record<string, unknown> = {};
+
+    if (opts.input) {
+      try {
+        Object.assign(inputs, JSON.parse(opts.input));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`Invalid JSON in --input: ${msg}`);
+        process.exit(1);
+      }
+    }
+
+    if (opts.param) {
+      for (const p of opts.param) {
+        const idx = p.indexOf('=');
+        if (idx === -1) {
+          console.error(`Invalid param "${p}". Use key=value format.`);
+          process.exit(1);
+        }
+        inputs[p.slice(0, idx)] = p.slice(idx + 1);
+      }
+    }
+
+    await toolRun(toolRegistry, toolName, inputs);
+  });
 
 // Integration commands (top-level)
 const integ = program.command('integration').description('Manage tool integrations');

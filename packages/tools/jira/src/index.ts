@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import type { Skill, ToolDefinition } from '@jarvis/core';
-import { resolveRulesForTool } from '@jarvis/core';
+import { resolveRulesForTool, verifyN8n } from '@jarvis/core';
 import type { Storage } from '@jarvis/storage';
 
 const tools: ToolDefinition[] = [
@@ -24,7 +24,7 @@ const tools: ToolDefinition[] = [
   },
   {
     name: 'jira_analyze_ticket',
-    description: 'Analyzes a Jira ticket for quality and completeness',
+    description: 'Analyzes a Jira ticket against project rules. Uses n8n to execute ACLI and returns TOON-formatted data for interpretation.',
     input_schema: {
       type: 'object',
       properties: {
@@ -34,10 +34,10 @@ const tools: ToolDefinition[] = [
         },
         project_id: {
           type: 'string',
-          description: 'Optional project ID for context',
+          description: 'Project ID (required to load Jira integration and rules)',
         },
       },
-      required: ['ticket_id'],
+      required: ['ticket_id', 'project_id'],
     },
   },
   {
@@ -118,10 +118,6 @@ function getJiraConfig(storage: Storage, projectId?: string): JiraServiceConfig 
   return storage.integrations.getConfig<JiraServiceConfig>(projectId, 'jira') ?? null;
 }
 
-/**
- * Switch ACLI to the correct Jira account before running a command.
- * If no config is available, commands run against the default ACLI session.
- */
 function ensureAcliSession(config: JiraServiceConfig | null): string[] {
   if (!config) return [];
   return [`acli jira auth switch --site ${config.site} --email ${config.email}`];
@@ -131,6 +127,77 @@ function runAcli(config: JiraServiceConfig | null, cmd: string): string {
   const preamble = ensureAcliSession(config);
   const fullCmd = [...preamble, cmd].join(' && ');
   return execSync(fullCmd, { encoding: 'utf-8', timeout: 30000 });
+}
+
+async function analyzeTicketViaN8n(
+  storage: Storage,
+  projectId: string,
+  ticketId: string,
+): Promise<string> {
+  const availability = await verifyN8n(storage, projectId);
+  if (!availability.available) {
+    return availability.message;
+  }
+
+  const jiraConfig = getJiraConfig(storage, projectId);
+  if (!jiraConfig) {
+    return [
+      '⚠ Jira no esta configurado para este proyecto.',
+      '',
+      'Configuralo con:',
+      `  jarvis integration set ${projectId} jira --site <site> --email <email>`,
+    ].join('\n');
+  }
+
+  const webhookUrl = `${availability.url}/webhook/jira-analyze-ticket`;
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticketId,
+        site: jiraConfig.site,
+        email: jiraConfig.email,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      return [
+        `⚠ Error disparando workflow n8n (${response.status})`,
+        '',
+        body,
+        '',
+        `Verifica que el workflow "jira-analyze-ticket" este activo en ${availability.url}`,
+      ].join('\n');
+    }
+
+    const ticketToon = await response.text();
+    const rulesSection = resolveRulesForTool(storage, projectId, 'jira_analyze_ticket', 'jira');
+
+    return [
+      `## Jira Ticket Analysis: ${ticketId}`,
+      '',
+      '### Ticket Data (TOON format)',
+      '```',
+      ticketToon,
+      '```',
+      '',
+      rulesSection,
+      '### Instructions',
+      'Evalua el ticket contra las reglas del proyecto y la Definition of Ready.',
+      'Para cada criterio responde:',
+      '- ✅ PASS',
+      '- ❌ FAIL (con explicacion)',
+      '- ⚠️ PARTIAL (con explicacion)',
+      '',
+      'Concluye con un veredicto **READY** o **NOT READY** y lista las mejoras necesarias.',
+    ].join('\n');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `Error ejecutando workflow n8n: ${msg}`;
+  }
 }
 
 export function createJiraSkill(storage: Storage): Skill {
@@ -145,35 +212,16 @@ export function createJiraSkill(storage: Storage): Skill {
       switch (toolName) {
         case 'jira_get_ticket': {
           const ticketId = input['ticket_id'] as string;
-          const cmd = `acli jira --action getIssue --issue ${ticketId}`;
+          const cmd = `acli jira workitem view ${ticketId}`;
           return runAcli(jiraConfig, cmd);
         }
 
         case 'jira_analyze_ticket': {
           const ticketId = input['ticket_id'] as string;
-          const rulesSection = resolveRulesForTool(storage, projectId, 'jira_analyze_ticket', 'jira');
-          return [
-            `## Jira Ticket Analysis Request: ${ticketId}`,
-            '',
-            'To analyze this ticket, first use jira_get_ticket to retrieve the ticket details,',
-            'then evaluate the following dimensions:',
-            '',
-            rulesSection,
-            '### Quality Checklist',
-            '- **Summary**: Is it concise and descriptive?',
-            '- **Description**: Does it clearly explain the problem/feature?',
-            '- **Acceptance Criteria**: Are they specific and measurable?',
-            '- **Story Points**: Are they estimated?',
-            '- **Priority**: Is it set appropriately?',
-            '- **Components/Labels**: Are they tagged correctly?',
-            '- **Dependencies**: Are blockers/linked issues documented?',
-            '',
-            '### Completeness Score',
-            'Rate each dimension 0-2 and sum for a total out of 14.',
-            '',
-            '### Recommendations',
-            'List specific improvements needed for this ticket to meet the Definition of Ready.',
-          ].join('\n');
+          if (!projectId) {
+            return 'Error: project_id es requerido para jira_analyze_ticket';
+          }
+          return analyzeTicketViaN8n(storage, projectId, ticketId);
         }
 
         case 'jira_list_my_tickets': {
@@ -185,7 +233,7 @@ export function createJiraSkill(storage: Storage): Skill {
           if (status) jql += ` AND status = "${status}"`;
           jql += ' ORDER BY updated DESC';
 
-          const cmd = `acli jira --action getIssueList --jql "${jql}"`;
+          const cmd = `acli jira workitem search --jql "${jql}"`;
           return runAcli(jiraConfig, cmd);
         }
 
@@ -193,7 +241,7 @@ export function createJiraSkill(storage: Storage): Skill {
           const ticketId = input['ticket_id'] as string;
           const comment = input['comment'] as string;
           const escapedComment = comment.replace(/"/g, '\\"');
-          const cmd = `acli jira --action addComment --issue ${ticketId} --comment "${escapedComment}"`;
+          const cmd = `acli jira workitem comment ${ticketId} --body "${escapedComment}"`;
           runAcli(jiraConfig, cmd);
           return `Comment added successfully to ${ticketId}.`;
         }
@@ -201,7 +249,7 @@ export function createJiraSkill(storage: Storage): Skill {
         case 'jira_transition_ticket': {
           const ticketId = input['ticket_id'] as string;
           const transition = input['transition'] as string;
-          const cmd = `acli jira --action transitionIssue --issue ${ticketId} --transition "${transition}"`;
+          const cmd = `acli jira workitem transition ${ticketId} --transition "${transition}"`;
           runAcli(jiraConfig, cmd);
           return `Ticket ${ticketId} transitioned to "${transition}" successfully.`;
         }

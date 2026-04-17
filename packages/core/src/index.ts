@@ -23,6 +23,8 @@ export type {
 export { ToolRegistry } from './tool-registry.js';
 export { ContextResolver } from './context-resolver.js';
 export { resolveRulesForTool } from './rule-injector.js';
+export { verifyN8n } from './n8n-verifier.js';
+export type { N8nAvailability } from './n8n-verifier.js';
 
 export type {
   AIProvider,
@@ -36,3 +38,5 @@ export { createAIProvider } from './provider-factory.js';
 export { AnthropicProvider } from './providers/anthropic-provider.js';
 export { OllamaProvider } from './providers/ollama-provider.js';
 export { QwenProvider } from './providers/qwen-provider.js';
+
+export { toTOON } from './toon.js';
