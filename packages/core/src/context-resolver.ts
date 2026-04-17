@@ -103,7 +103,16 @@ No hay proyecto activo en esta sesión. El usuario puede estar haciendo consulta
     if (project.integrations.length > 0) {
       parts.push('### Integraciones Configuradas');
       for (const i of project.integrations) {
-        parts.push(`- **${i.type}** (${i.key}): ${i.value}`);
+        const config = JSON.parse(i.config);
+        const summary = Object.entries(config)
+          .map(([k, v]) => {
+            const display = k.includes('key') || k.includes('token')
+              ? '****' + String(v).slice(-4)
+              : String(v);
+            return `${k}=${display}`;
+          })
+          .join(', ');
+        parts.push(`- **${i.service}**: ${summary}`);
       }
     }
 
@@ -125,12 +134,12 @@ No hay proyecto activo en esta sesión. El usuario puede estar haciendo consulta
     if (!project) return allTools;
 
     // Filter out tools for integrations that aren't configured
-    const configuredTypes = new Set(project.integrations.map(i => i.type));
+    const configuredServices = new Set(project.integrations.map(i => i.service));
 
     return allTools.filter(tool => {
       // If tool name starts with a known integration prefix, check if configured
-      if (tool.name.startsWith('jira_') && !configuredTypes.has('jira')) return false;
-      if (tool.name.startsWith('n8n_') && !configuredTypes.has('n8n')) return false;
+      if (tool.name.startsWith('jira_') && !configuredServices.has('jira')) return false;
+      if (tool.name.startsWith('n8n_') && !configuredServices.has('n8n')) return false;
       return true;
     });
   }

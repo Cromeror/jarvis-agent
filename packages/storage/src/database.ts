@@ -60,6 +60,17 @@ export function initDatabase(dbPath: string): BetterSqlite3.Database {
       notes      TEXT
     );
 
+    -- Migration v2: structured tool integrations replacing key-value project_integrations
+    CREATE TABLE IF NOT EXISTS tool_integrations (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      service    TEXT NOT NULL,
+      config     TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(project_id, service)
+    );
+
     CREATE TABLE IF NOT EXISTS project_knowledge (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -136,6 +147,9 @@ export function initDatabase(dbPath: string): BetterSqlite3.Database {
 
     CREATE INDEX IF NOT EXISTS idx_project_integrations_project_id
       ON project_integrations(project_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_integrations_project_id
+      ON tool_integrations(project_id);
 
     CREATE INDEX IF NOT EXISTS idx_project_knowledge_project_id
       ON project_knowledge(project_id);

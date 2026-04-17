@@ -35,10 +35,8 @@ interface SetStackBody {
 }
 
 interface SetIntegrationBody {
-  type: string;
-  key: string;
-  value: string;
-  notes?: string;
+  service: string;
+  config: Record<string, unknown>;
 }
 
 @Controller('api/projects')
@@ -149,19 +147,17 @@ export class ProjectsController {
     this.assertProjectExists(id);
     const integration = this.storage.integrations.set(
       id,
-      body.type,
-      body.key,
-      body.value,
-      body.notes,
+      body.service,
+      body.config,
     );
     return { data: integration };
   }
 
-  @Delete('integrations/:integrationId')
-  removeIntegration(@Param('integrationId') integrationId: string) {
-    const numId = parseInt(integrationId, 10);
-    this.storage.integrations.remove(numId);
-    return { data: { removed: numId } };
+  @Delete(':id/integrations/:service')
+  removeIntegration(@Param('id') id: string, @Param('service') service: string) {
+    this.assertProjectExists(id);
+    this.storage.integrations.remove(id, service);
+    return { data: { removed: { project_id: id, service } } };
   }
 
   // --- Knowledge ---

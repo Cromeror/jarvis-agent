@@ -37,6 +37,7 @@ export interface ProjectRule {
   tool_name: string | null;
 }
 
+/** @deprecated Use ToolIntegration instead */
 export interface ProjectIntegration {
   id: number;
   project_id: string;
@@ -45,6 +46,32 @@ export interface ProjectIntegration {
   value: string;
   notes: string | null;
 }
+
+export interface ToolIntegration {
+  id: number;
+  project_id: string;
+  service: string;
+  config: string; // JSON string
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JiraServiceConfig {
+  site: string;
+  email: string;
+}
+
+export interface N8nServiceConfig {
+  url: string;
+  api_key: string;
+}
+
+export interface GithubServiceConfig {
+  repo: string;
+  token?: string;
+}
+
+export type ServiceConfig = JiraServiceConfig | N8nServiceConfig | GithubServiceConfig;
 
 export interface ProjectKnowledge {
   id: number;
@@ -133,6 +160,6 @@ export interface ProjectContext {
   project: Project;
   stack: ProjectStack[];
   rules: ProjectRule[];
-  integrations: ProjectIntegration[];
+  integrations: ToolIntegration[];
   knowledge: ProjectKnowledge[];
 }

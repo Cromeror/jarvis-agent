@@ -58,6 +58,11 @@ const tools: ToolDefinition[] = [
   },
 ];
 
+interface N8nServiceConfig {
+  url: string;
+  api_key: string;
+}
+
 interface N8nConfig {
   url: string;
   apiKey: string;
@@ -66,15 +71,12 @@ interface N8nConfig {
 function getN8nConfig(storage: Storage, projectId?: string): N8nConfig | null {
   if (!projectId) return null;
 
-  const integrations = storage.integrations.get(projectId, 'n8n');
-  const urlEntry = integrations.find((i) => i.key === 'url');
-  const apiKeyEntry = integrations.find((i) => i.key === 'api_key');
-
-  if (!urlEntry || !apiKeyEntry) return null;
+  const raw = storage.integrations.getConfig<N8nServiceConfig>(projectId, 'n8n');
+  if (!raw) return null;
 
   return {
-    url: urlEntry.value.replace(/\/$/, ''), // strip trailing slash
-    apiKey: apiKeyEntry.value,
+    url: raw.url.replace(/\/$/, ''), // strip trailing slash
+    apiKey: raw.api_key,
   };
 }
 
@@ -97,9 +99,8 @@ export function createN8nSkill(storage: Storage): Skill {
       return [
         'n8n integration is not configured.',
         '',
-        'To configure n8n, add the following integrations to the project:',
-        '  storage.integrations.set(projectId, "n8n", "url", "https://your-n8n-instance.com")',
-        '  storage.integrations.set(projectId, "n8n", "api_key", "your-api-key")',
+        'To configure n8n, run:',
+        '  jarvis integration set <project-id> n8n --url https://your-n8n-instance.com --api-key your-api-key',
       ].join('\n');
     }
 

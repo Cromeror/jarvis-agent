@@ -123,9 +123,13 @@ export function seedDatabase(db: BetterSqlite3.Database): void {
     // Integration
     // ------------------------------------------------------------------
     db.prepare(
-      `INSERT INTO project_integrations (project_id, type, key, value, notes)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run("demo-ecommerce", "jira", "acli_profile", "demo", null);
+      `INSERT OR IGNORE INTO tool_integrations (project_id, service, config)
+       VALUES (?, ?, ?)`,
+    ).run(
+      "demo-ecommerce",
+      "jira",
+      JSON.stringify({ site: "demo.atlassian.net", email: "demo@example.com" }),
+    );
 
     // ------------------------------------------------------------------
     // Knowledge

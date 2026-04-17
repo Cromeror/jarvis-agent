@@ -108,15 +108,29 @@ const tools: ToolDefinition[] = [
   },
 ];
 
-function getAcliProfile(storage: Storage, projectId?: string): string | null {
-  if (!projectId) return null;
-  const integrations = storage.integrations.get(projectId, 'jira');
-  const profileEntry = integrations.find((i) => i.key === 'acli_profile');
-  return profileEntry?.value ?? null;
+interface JiraServiceConfig {
+  site: string;
+  email: string;
 }
 
-function buildAcliBase(profile: string | null): string {
-  return profile ? `acli --profile ${profile}` : 'acli';
+function getJiraConfig(storage: Storage, projectId?: string): JiraServiceConfig | null {
+  if (!projectId) return null;
+  return storage.integrations.getConfig<JiraServiceConfig>(projectId, 'jira') ?? null;
+}
+
+/**
+ * Switch ACLI to the correct Jira account before running a command.
+ * If no config is available, commands run against the default ACLI session.
+ */
+function ensureAcliSession(config: JiraServiceConfig | null): string[] {
+  if (!config) return [];
+  return [`acli jira auth switch --site ${config.site} --email ${config.email}`];
+}
+
+function runAcli(config: JiraServiceConfig | null, cmd: string): string {
+  const preamble = ensureAcliSession(config);
+  const fullCmd = [...preamble, cmd].join(' && ');
+  return execSync(fullCmd, { encoding: 'utf-8', timeout: 30000 });
 }
 
 export function createJiraSkill(storage: Storage): Skill {
@@ -125,16 +139,14 @@ export function createJiraSkill(storage: Storage): Skill {
     input: Record<string, unknown>,
   ): Promise<string> {
     const projectId = input['project_id'] as string | undefined;
-    const profile = getAcliProfile(storage, projectId);
-    const acli = buildAcliBase(profile);
+    const jiraConfig = getJiraConfig(storage, projectId);
 
     try {
       switch (toolName) {
         case 'jira_get_ticket': {
           const ticketId = input['ticket_id'] as string;
-          const cmd = `${acli} jira --action getIssue --issue ${ticketId}`;
-          const result = execSync(cmd, { encoding: 'utf-8', timeout: 30000 });
-          return result;
+          const cmd = `acli jira --action getIssue --issue ${ticketId}`;
+          return runAcli(jiraConfig, cmd);
         }
 
         case 'jira_analyze_ticket': {
@@ -157,7 +169,7 @@ export function createJiraSkill(storage: Storage): Skill {
             '- **Dependencies**: Are blockers/linked issues documented?',
             '',
             '### Completeness Score',
-            'Rate each dimension 0–2 and sum for a total out of 14.',
+            'Rate each dimension 0-2 and sum for a total out of 14.',
             '',
             '### Recommendations',
             'List specific improvements needed for this ticket to meet the Definition of Ready.',
@@ -173,25 +185,24 @@ export function createJiraSkill(storage: Storage): Skill {
           if (status) jql += ` AND status = "${status}"`;
           jql += ' ORDER BY updated DESC';
 
-          const cmd = `${acli} jira --action getIssueList --jql "${jql}"`;
-          const result = execSync(cmd, { encoding: 'utf-8', timeout: 30000 });
-          return result;
+          const cmd = `acli jira --action getIssueList --jql "${jql}"`;
+          return runAcli(jiraConfig, cmd);
         }
 
         case 'jira_add_comment': {
           const ticketId = input['ticket_id'] as string;
           const comment = input['comment'] as string;
           const escapedComment = comment.replace(/"/g, '\\"');
-          const cmd = `${acli} jira --action addComment --issue ${ticketId} --comment "${escapedComment}"`;
-          execSync(cmd, { encoding: 'utf-8', timeout: 30000 });
+          const cmd = `acli jira --action addComment --issue ${ticketId} --comment "${escapedComment}"`;
+          runAcli(jiraConfig, cmd);
           return `Comment added successfully to ${ticketId}.`;
         }
 
         case 'jira_transition_ticket': {
           const ticketId = input['ticket_id'] as string;
           const transition = input['transition'] as string;
-          const cmd = `${acli} jira --action transitionIssue --issue ${ticketId} --transition "${transition}"`;
-          execSync(cmd, { encoding: 'utf-8', timeout: 30000 });
+          const cmd = `acli jira --action transitionIssue --issue ${ticketId} --transition "${transition}"`;
+          runAcli(jiraConfig, cmd);
           return `Ticket ${ticketId} transitioned to "${transition}" successfully.`;
         }
 
@@ -201,15 +212,18 @@ export function createJiraSkill(storage: Storage): Skill {
     } catch (err) {
       const error = err as Error & { status?: number; stderr?: string };
       const details = error.stderr ?? error.message ?? String(err);
+      const configInfo = jiraConfig
+        ? `site=${jiraConfig.site}, email=${jiraConfig.email}`
+        : 'none (default)';
       return [
         `Error executing ${toolName}: ${details}`,
         '',
         'Possible causes:',
         '- ACLI is not installed (install from https://bobswift.atlassian.net/wiki/spaces/ACLI)',
-        '- ACLI profile is not configured (set via storage.integrations with type="jira", key="acli_profile")',
+        '- Jira integration is not configured (use: jarvis integration set <project> jira --site <site> --email <email>)',
         '- Invalid ticket ID or insufficient permissions',
         '',
-        `Profile used: ${profile ?? 'none (default)'}`,
+        `Jira config: ${configInfo}`,
       ].join('\n');
     }
   }

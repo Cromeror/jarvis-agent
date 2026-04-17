@@ -3,10 +3,10 @@ import type {
   CreateProjectInput,
   Project,
   ProjectContext,
-  ProjectIntegration,
   ProjectKnowledge,
   ProjectRule,
   ProjectStack,
+  ToolIntegration,
 } from "../types.js";
 
 export function createProjectsRepo(db: BetterSqlite3.Database) {
@@ -54,8 +54,8 @@ export function createProjectsRepo(db: BetterSqlite3.Database) {
     "SELECT * FROM project_rules WHERE project_id = ? ORDER BY priority DESC",
   );
 
-  const stmtIntegrations = db.prepare<[string], ProjectIntegration>(
-    "SELECT * FROM project_integrations WHERE project_id = ?",
+  const stmtIntegrations = db.prepare<[string], ToolIntegration>(
+    "SELECT * FROM tool_integrations WHERE project_id = ? ORDER BY service",
   );
 
   const stmtKnowledge = db.prepare<[string], ProjectKnowledge>(

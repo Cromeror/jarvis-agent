@@ -37,57 +37,6 @@ export async function projectCreate(storage: Storage, id?: string, opts?: Create
   console.log(chalk.green(`\nProject "${name}" created with id "${inputId}"\n`));
 }
 
-// --- Integration subcommands ---
-
-export function integrationsList(storage: Storage, projectId: string): void {
-  const project = storage.projects.get(projectId);
-  if (!project) {
-    console.log(chalk.red(`Project "${projectId}" not found.`));
-    return;
-  }
-
-  const integrations = storage.integrations.list(projectId);
-  if (integrations.length === 0) {
-    console.log(chalk.yellow(`No integrations found for "${projectId}".`));
-    return;
-  }
-
-  console.log(chalk.bold(`\nIntegrations for ${project.name}:\n`));
-  for (const i of integrations) {
-    const notes = i.notes ? chalk.gray(` (${i.notes})`) : '';
-    console.log(`  ${chalk.magenta.bold(i.type)} ${i.key}: ${i.value}${notes}`);
-  }
-  console.log('');
-}
-
-export function integrationsSet(
-  storage: Storage, projectId: string,
-  type: string, key: string, value: string, notes?: string
-): void {
-  const project = storage.projects.get(projectId);
-  if (!project) {
-    console.log(chalk.red(`Project "${projectId}" not found.`));
-    return;
-  }
-
-  storage.integrations.set(projectId, type, key, value, notes);
-  console.log(chalk.green(`Integration set: ${type}.${key} for ${projectId}`));
-}
-
-export async function integrationsRemove(storage: Storage, id: string): Promise<void> {
-  const integrationId = parseInt(id, 10);
-  if (isNaN(integrationId)) {
-    console.log(chalk.red('Invalid integration ID.'));
-    return;
-  }
-
-  const yes = await confirm({ message: `Remove integration #${integrationId}?`, default: false });
-  if (yes) {
-    storage.integrations.remove(integrationId);
-    console.log(chalk.green(`Integration #${integrationId} removed.`));
-  }
-}
-
 export async function projectList(storage: Storage): Promise<void> {
   const projects = storage.projects.list();
   if (projects.length === 0) {
@@ -133,7 +82,16 @@ export async function projectShow(storage: Storage, id: string): Promise<void> {
   if (ctx.integrations.length > 0) {
     console.log(chalk.bold('\nIntegrations:'));
     for (const i of ctx.integrations) {
-      console.log(`  ${chalk.magenta(i.type)} (${i.key}): ${i.value}`);
+      const config = JSON.parse(i.config);
+      const summary = Object.entries(config)
+        .map(([k, v]) => {
+          const display = k.includes('key') || k.includes('token')
+            ? '****' + String(v).slice(-4)
+            : String(v);
+          return `${k}=${display}`;
+        })
+        .join(', ');
+      console.log(`  ${chalk.magenta(i.service)}: ${summary}`);
     }
   }
 
@@ -182,11 +140,15 @@ export async function projectEdit(storage: Storage, id: string): Promise<void> {
       break;
     }
     case 'integration': {
-      const type = await input({ message: 'Type (e.g. jira, n8n, github):' });
-      const key = await input({ message: 'Key (e.g. acli_profile, base_url):' });
-      const value = await input({ message: 'Value:' });
-      storage.integrations.set(id, type, key, value);
-      console.log(chalk.green('Integration added.'));
+      const service = await input({ message: 'Service (jira, n8n, github):' });
+      const configStr = await input({ message: 'Config as JSON (e.g. {"site":"myorg.atlassian.net","email":"me@co.com"}):' });
+      try {
+        const config = JSON.parse(configStr);
+        storage.integrations.set(id, service, config);
+        console.log(chalk.green(`Integration ${service} set.`));
+      } catch {
+        console.log(chalk.red('Invalid JSON config.'));
+      }
       break;
     }
     case 'knowledge': {

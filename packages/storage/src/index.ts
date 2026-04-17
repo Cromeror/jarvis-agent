@@ -17,7 +17,10 @@ export type {
   AIConfig,
   CognitiveBase,
   CreateProjectInput,
+  GithubServiceConfig,
+  JiraServiceConfig,
   Message,
+  N8nServiceConfig,
   Output,
   Project,
   ProjectContext,
@@ -26,8 +29,10 @@ export type {
   ProjectRule,
   ProjectStack,
   SaveOutputInput,
+  ServiceConfig,
   Session,
   ToolExecution,
+  ToolIntegration,
 } from "./types.js";
 
 // Re-export database initializer

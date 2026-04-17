@@ -12,8 +12,8 @@ import {
   projectCreate, projectList, projectShow, projectEdit,
   rulesList, rulesAdd, rulesRemove,
   stackList, stackSet, stackRemove,
-  integrationsList, integrationsSet, integrationsRemove,
 } from './commands/project.js';
+import { integrationList, integrationSet, integrationRemove } from './commands/integration.js';
 import { baseShow, baseEdit, baseSync } from './commands/base.js';
 import { setupCommand } from './commands/setup.js';
 import { aiSetup, aiStatus, aiList, aiActivate, aiSet, aiTest } from './commands/ai.js';
@@ -153,25 +153,32 @@ stack.command('remove <stack-id>').description('Remove a stack entry by ID').act
   await stackRemove(storage, stackId);
 });
 
-// Project > Integration subcommands
-const integration = proj.command('integration').description('Manage project integrations');
-integration.command('list <project-id>').description('List integrations').action((projectId: string) => {
-  const config = loadConfig();
-  const { storage } = bootstrap(config);
-  integrationsList(storage, projectId);
-});
-integration.command('set <project-id> <type> <key> <value>').description('Set an integration')
-  .option('--notes <notes>', 'Optional notes')
-  .action((projectId: string, type: string, key: string, value: string, opts) => {
+// Integration commands (top-level)
+const integ = program.command('integration').description('Manage tool integrations');
+integ.command('list <project-id>').description('List integrations for a project')
+  .action((projectId: string) => {
     const config = loadConfig();
     const { storage } = bootstrap(config);
-    integrationsSet(storage, projectId, type, key, value, opts.notes);
+    integrationList(storage, projectId);
   });
-integration.command('remove <integration-id>').description('Remove an integration by ID').action(async (id: string) => {
-  const config = loadConfig();
-  const { storage } = bootstrap(config);
-  await integrationsRemove(storage, id);
-});
+integ.command('set <project-id> <service>').description('Set a tool integration')
+  .option('--site <site>', 'Jira site (e.g. myorg.atlassian.net)')
+  .option('--email <email>', 'Jira email')
+  .option('--url <url>', 'Service URL (n8n)')
+  .option('--api-key <key>', 'API key (n8n)')
+  .option('--repo <repo>', 'GitHub repo (org/repo)')
+  .option('--token <token>', 'GitHub token')
+  .action((projectId: string, service: string, opts) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    integrationSet(storage, projectId, service, opts);
+  });
+integ.command('remove <project-id> <service>').description('Remove a tool integration')
+  .action((projectId: string, service: string) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    integrationRemove(storage, projectId, service);
+  });
 
 // AI commands
 const ai = program.command('ai').description('Configure AI providers');
