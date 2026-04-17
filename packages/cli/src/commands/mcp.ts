@@ -6,6 +6,7 @@ import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 import type { Storage } from '@jarvis/storage';
 import type { ToolRegistry } from '@jarvis/core';
+import { getJarvisKnowledge } from '@jarvis/core';
 
 const SERVER_NAME = 'jarvis';
 const BLOCK_BEGIN = '<!-- JARVIS:BEGIN';
@@ -178,7 +179,7 @@ function projectClaudeMd(): string {
 
 export interface BlockSource {
   scope: 'user' | 'project';
-  tools: Array<{ name: string; description: string }>;
+  toolRegistry?: ToolRegistry;
   projects?: Array<{ id: string; name: string }>;
   projectContext?: {
     id: string;
@@ -191,36 +192,11 @@ function renderBlock(src: BlockSource): string {
   const lines: string[] = [];
 
   if (src.scope === 'user') {
-    lines.push('## Jarvis MCP');
-    lines.push('');
-    lines.push('Jarvis is registered as an MCP server (`mcp__jarvis__*`). It is a persistent agent');
-    lines.push('with a SQLite-backed memory of projects, rules, stack and integrations.');
-    lines.push('');
-    lines.push('### When to use');
-    lines.push('- Jira tickets (`XXX-123` pattern) → `jarvis_run_tool` with `jira_analyze_ticket` or `jira_get_ticket`.');
-    lines.push('- Refining requirements / user stories / DoR → `refine_requirements`, `generate_user_stories`, `check_definition_of_ready`.');
-    lines.push('- Project history, stack, conventions → `jarvis_project_context`.');
-    lines.push('- n8n workflows → `n8n_list_workflows`, `n8n_trigger_workflow`.');
-    lines.push('- Open-ended delegation to Jarvis agent loop → `jarvis_chat`.');
-    lines.push('');
-    lines.push('### When NOT to use');
-    lines.push('- Reading/editing local files → use Read/Edit directly.');
-    lines.push('- Running tests or builds → use Bash.');
-    lines.push('');
-    lines.push('### Finding `project_id`');
-    lines.push('If the project CLAUDE.md does not pin a `project_id`, call `jarvis_list_projects` first.');
-    lines.push('');
-    lines.push('### Available tools');
-    for (const t of src.tools) {
-      lines.push(`- \`${t.name}\` — ${t.description}`);
-    }
-    if (src.projects && src.projects.length > 0) {
-      lines.push('');
-      lines.push('### Known projects');
-      for (const p of src.projects) {
-        lines.push(`- \`${p.id}\` — ${p.name}`);
-      }
-    }
+    if (!src.toolRegistry) throw new Error('toolRegistry required for user scope');
+    return getJarvisKnowledge(src.toolRegistry, {
+      projects: src.projects,
+      forSystemPrompt: false,
+    });
   } else {
     lines.push('## Jarvis MCP (project)');
     lines.push('');
@@ -376,15 +352,10 @@ export function mcpSync(
   const scope: 'user' | 'project' = opts.project ? 'project' : 'user';
   const filePath = scope === 'user' ? userClaudeMd() : projectClaudeMd();
 
-  const tools = toolRegistry.getTools().map((t) => ({
-    name: t.name,
-    description: t.description,
-  }));
-
   let src: BlockSource;
   if (scope === 'user') {
     const projects = storage.projects.list().map((p) => ({ id: p.id, name: p.name }));
-    src = { scope, tools, projects };
+    src = { scope, toolRegistry, projects };
   } else {
     let projectContext;
     if (opts.projectId) {
@@ -396,7 +367,7 @@ export function mcpSync(
       const integrations = storage.integrations.list(opts.projectId).map((i) => ({ service: i.service }));
       projectContext = { id: project.id, name: project.name, integrations };
     }
-    src = { scope, tools, projectContext };
+    src = { scope, projectContext };
   }
 
   let result: SyncResult;
@@ -446,10 +417,9 @@ export function mcpCheckDrift(
 
   const userPath = userClaudeMd();
   if (existsSync(userPath)) {
-    const tools = toolRegistry.getTools().map((t) => ({ name: t.name, description: t.description }));
     const projects = storage.projects.list().map((p) => ({ id: p.id, name: p.name }));
     try {
-      const r = computeSync(userPath, { scope: 'user', tools, projects }, { check: true });
+      const r = computeSync(userPath, { scope: 'user', toolRegistry, projects }, { check: true });
       results.push({ scope: 'user', path: userPath, drift: r.action === 'drift', reason: r.action === 'drift' ? 'hash mismatch' : undefined });
     } catch (err) {
       results.push({ scope: 'user', path: userPath, drift: true, reason: err instanceof Error ? err.message : 'check failed' });

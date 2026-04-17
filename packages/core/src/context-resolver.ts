@@ -1,6 +1,7 @@
 import type { Storage, ProjectContext, CognitiveBase } from '@jarvis/storage';
 import type { ResolvedContext, ToolDefinition } from './types.js';
 import { ToolRegistry } from './tool-registry.js';
+import { getJarvisKnowledge } from './jarvis-knowledge.js';
 
 export class ContextResolver {
   constructor(
@@ -9,10 +10,17 @@ export class ContextResolver {
   ) {}
 
   resolve(projectId: string | null): ResolvedContext {
+    // No project → respond as "Jarvis talking about itself". Load the
+    // knowledge base directly and skip cognitive base / project context.
+    // This keeps `jarvis_chat` scoped to Jarvis meta-questions and forces
+    // the model to decline when asked about projects.
+    if (!projectId) {
+      const systemPrompt = getJarvisKnowledge(this.toolRegistry, { forSystemPrompt: true });
+      return { systemPrompt, availableTools: [], projectId: null };
+    }
+
     const cognitiveBase = this.storage.cognitive.getActive() ?? null;
-    const projectContext = projectId
-      ? (this.storage.projects.getFullContext(projectId) ?? null)
-      : null;
+    const projectContext = this.storage.projects.getFullContext(projectId) ?? null;
 
     const systemPrompt = this.buildSystemPrompt(cognitiveBase, projectContext);
     const availableTools = this.resolveTools(projectContext);
