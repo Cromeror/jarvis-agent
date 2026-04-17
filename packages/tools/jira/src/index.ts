@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import type { Skill, ToolDefinition } from '@jarvis/core';
+import { resolveRulesForTool } from '@jarvis/core';
 import type { Storage } from '@jarvis/storage';
 
 const tools: ToolDefinition[] = [
@@ -138,12 +139,14 @@ export function createJiraSkill(storage: Storage): Skill {
 
         case 'jira_analyze_ticket': {
           const ticketId = input['ticket_id'] as string;
+          const rulesSection = resolveRulesForTool(storage, projectId, 'jira_analyze_ticket', 'jira');
           return [
             `## Jira Ticket Analysis Request: ${ticketId}`,
             '',
             'To analyze this ticket, first use jira_get_ticket to retrieve the ticket details,',
             'then evaluate the following dimensions:',
             '',
+            rulesSection,
             '### Quality Checklist',
             '- **Summary**: Is it concise and descriptive?',
             '- **Description**: Does it clearly explain the problem/feature?',

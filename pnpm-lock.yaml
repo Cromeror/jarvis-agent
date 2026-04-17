@@ -99,21 +99,21 @@ importers:
       '@jarvis/core':
         specifier: workspace:*
         version: link:../core
-      '@jarvis/skills-code':
-        specifier: workspace:*
-        version: link:../skills/code
-      '@jarvis/skills-jira':
-        specifier: workspace:*
-        version: link:../skills/jira
-      '@jarvis/skills-n8n':
-        specifier: workspace:*
-        version: link:../skills/n8n
-      '@jarvis/skills-refine':
-        specifier: workspace:*
-        version: link:../skills/refine
       '@jarvis/storage':
         specifier: workspace:*
         version: link:../storage
+      '@jarvis/tools-code':
+        specifier: workspace:*
+        version: link:../tools/code
+      '@jarvis/tools-jira':
+        specifier: workspace:*
+        version: link:../tools/jira
+      '@jarvis/tools-n8n':
+        specifier: workspace:*
+        version: link:../tools/n8n
+      '@jarvis/tools-refine':
+        specifier: workspace:*
+        version: link:../tools/refine
       chalk:
         specifier: ^5.4.1
         version: 5.6.2
@@ -138,6 +138,9 @@ importers:
 
   packages/http-gateway:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.39.0
+        version: 0.39.0
       '@jarvis/core':
         specifier: workspace:*
         version: link:../core
@@ -168,63 +171,27 @@ importers:
       '@jarvis/core':
         specifier: workspace:*
         version: link:../core
-      '@jarvis/skills-code':
-        specifier: workspace:*
-        version: link:../skills/code
-      '@jarvis/skills-jira':
-        specifier: workspace:*
-        version: link:../skills/jira
-      '@jarvis/skills-n8n':
-        specifier: workspace:*
-        version: link:../skills/n8n
-      '@jarvis/skills-refine':
-        specifier: workspace:*
-        version: link:../skills/refine
       '@jarvis/storage':
         specifier: workspace:*
         version: link:../storage
+      '@jarvis/tools-code':
+        specifier: workspace:*
+        version: link:../tools/code
+      '@jarvis/tools-jira':
+        specifier: workspace:*
+        version: link:../tools/jira
+      '@jarvis/tools-n8n':
+        specifier: workspace:*
+        version: link:../tools/n8n
+      '@jarvis/tools-refine':
+        specifier: workspace:*
+        version: link:../tools/refine
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.29.0(zod@3.25.76)
       zod:
         specifier: ^3.24.0
         version: 3.25.76
-
-  packages/skills/code:
-    dependencies:
-      '@jarvis/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@jarvis/storage':
-        specifier: workspace:*
-        version: link:../../storage
-
-  packages/skills/jira:
-    dependencies:
-      '@jarvis/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@jarvis/storage':
-        specifier: workspace:*
-        version: link:../../storage
-
-  packages/skills/n8n:
-    dependencies:
-      '@jarvis/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@jarvis/storage':
-        specifier: workspace:*
-        version: link:../../storage
-
-  packages/skills/refine:
-    dependencies:
-      '@jarvis/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@jarvis/storage':
-        specifier: workspace:*
-        version: link:../../storage
 
   packages/storage:
     dependencies:
@@ -234,6 +201,42 @@ importers:
       uuid:
         specifier: ^11.1.0
         version: 11.1.0
+
+  packages/tools/code:
+    dependencies:
+      '@jarvis/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@jarvis/storage':
+        specifier: workspace:*
+        version: link:../../storage
+
+  packages/tools/jira:
+    dependencies:
+      '@jarvis/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@jarvis/storage':
+        specifier: workspace:*
+        version: link:../../storage
+
+  packages/tools/n8n:
+    dependencies:
+      '@jarvis/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@jarvis/storage':
+        specifier: workspace:*
+        version: link:../../storage
+
+  packages/tools/refine:
+    dependencies:
+      '@jarvis/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@jarvis/storage':
+        specifier: workspace:*
+        version: link:../../storage
 
 packages:
 

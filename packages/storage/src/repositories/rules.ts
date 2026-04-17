@@ -5,9 +5,9 @@ export function createRulesRepo(db: BetterSqlite3.Database) {
   // -------------------------------------------------------------------
   // Prepared statements
   // -------------------------------------------------------------------
-  const stmtInsert = db.prepare<[string, string, string, number]>(
-    `INSERT INTO project_rules (project_id, category, rule, priority)
-     VALUES (?, ?, ?, ?)`,
+  const stmtInsert = db.prepare<[string, string, string, number, string | null]>(
+    `INSERT INTO project_rules (project_id, category, rule, priority, tool_name)
+     VALUES (?, ?, ?, ?, ?)`,
   );
 
   const stmtGet = db.prepare<[number], ProjectRule>(
@@ -20,6 +20,14 @@ export function createRulesRepo(db: BetterSqlite3.Database) {
 
   const stmtListByCategory = db.prepare<[string, string], ProjectRule>(
     "SELECT * FROM project_rules WHERE project_id = ? AND category = ? ORDER BY priority DESC",
+  );
+
+  const stmtListByTool = db.prepare<[string, string], ProjectRule>(
+    `SELECT * FROM project_rules WHERE project_id = ? AND (tool_name = ? OR tool_name IS NULL) ORDER BY priority DESC`,
+  );
+
+  const stmtListToolNames = db.prepare<[], { tool_name: string }>(
+    "SELECT DISTINCT tool_name FROM project_rules WHERE tool_name IS NOT NULL",
   );
 
   const stmtRemove = db.prepare<[number]>(
@@ -43,8 +51,9 @@ export function createRulesRepo(db: BetterSqlite3.Database) {
     category: string,
     rule: string,
     priority = 0,
+    toolName: string | null = null,
   ): ProjectRule {
-    const result = stmtInsert.run(projectId, category, rule, priority);
+    const result = stmtInsert.run(projectId, category, rule, priority, toolName);
     return stmtGet.get(Number(result.lastInsertRowid))!;
   }
 
@@ -53,6 +62,14 @@ export function createRulesRepo(db: BetterSqlite3.Database) {
       return stmtListByCategory.all(projectId, category);
     }
     return stmtListAll.all(projectId);
+  }
+
+  function listByTool(projectId: string, toolName: string): ProjectRule[] {
+    return stmtListByTool.all(projectId, toolName);
+  }
+
+  function listToolNames(): string[] {
+    return stmtListToolNames.all().map((row) => row.tool_name);
   }
 
   function remove(id: number): void {
@@ -72,5 +89,5 @@ export function createRulesRepo(db: BetterSqlite3.Database) {
     return stmtGet.get(id);
   }
 
-  return { add, list, remove, update };
+  return { add, list, listByTool, listToolNames, remove, update };
 }

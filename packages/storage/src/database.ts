@@ -107,6 +107,17 @@ export function initDatabase(dbPath: string): BetterSqlite3.Database {
       error       TEXT,
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS ai_config (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider   TEXT NOT NULL,
+      api_key    TEXT,
+      base_url   TEXT,
+      model      TEXT NOT NULL,
+      is_active  INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // ------------------------------------------------------------------
@@ -138,6 +149,16 @@ export function initDatabase(dbPath: string): BetterSqlite3.Database {
     CREATE INDEX IF NOT EXISTS idx_tool_executions_session_id
       ON tool_executions(session_id);
   `);
+
+  // ------------------------------------------------------------------
+  // Additive migrations
+  // ------------------------------------------------------------------
+
+  try {
+    db.exec(`ALTER TABLE project_rules ADD COLUMN tool_name TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
 
   return db;
 }

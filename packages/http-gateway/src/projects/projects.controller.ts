@@ -8,9 +8,11 @@ import {
   Body,
   Inject,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { type Storage } from '@jarvis/storage';
 import { STORAGE_TOKEN } from '../storage.module.js';
+import { RuleValidatorService } from '../rules/rule-validator.service.js';
 
 interface CreateProjectBody {
   id: string;
@@ -23,6 +25,7 @@ interface AddRuleBody {
   category: string;
   rule: string;
   priority?: number;
+  tool_name?: string;
 }
 
 interface SetStackBody {
@@ -42,6 +45,7 @@ interface SetIntegrationBody {
 export class ProjectsController {
   constructor(
     @Inject(STORAGE_TOKEN) private readonly storage: Storage,
+    private readonly ruleValidator: RuleValidatorService,
   ) {}
 
   private assertProjectExists(id: string): void {
@@ -82,10 +86,25 @@ export class ProjectsController {
   }
 
   @Post(':id/rules')
-  addRule(@Param('id') id: string, @Body() body: AddRuleBody) {
+  async addRule(@Param('id') id: string, @Body() body: AddRuleBody) {
     this.assertProjectExists(id);
-    const rule = this.storage.rules.add(id, body.category, body.rule, body.priority);
-    return { data: rule };
+
+    const toolName = body.tool_name ?? null;
+    const validation = await this.ruleValidator.validate(
+      id, body.category, body.rule, toolName,
+    );
+
+    if (!validation.valid) {
+      throw new UnprocessableEntityException({
+        message: 'Rule validation failed',
+        reason: validation.reason,
+        conflicts: validation.conflicts,
+        suggestion: validation.suggestion ?? null,
+      });
+    }
+
+    const rule = this.storage.rules.add(id, body.category, body.rule, body.priority, toolName);
+    return { data: rule, validation: { reason: validation.reason } };
   }
 
   @Delete('rules/:ruleId')

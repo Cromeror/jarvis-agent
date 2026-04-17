@@ -5,10 +5,10 @@ import { createStorage } from '@jarvis/storage';
 import { ToolRegistry } from '@jarvis/core';
 import { JarvisAgent } from '@jarvis/agent';
 
-import { createJiraSkill } from '@jarvis/skills-jira';
-import { createRefineSkill } from '@jarvis/skills-refine';
-import { createCodeSkill } from '@jarvis/skills-code';
-import { createN8nSkill } from '@jarvis/skills-n8n';
+import { createJiraSkill } from '@jarvis/tools-jira';
+import { createRefineSkill } from '@jarvis/tools-refine';
+import { createCodeSkill } from '@jarvis/tools-code';
+import { createN8nSkill } from '@jarvis/tools-n8n';
 
 export async function startServer(): Promise<void> {
   const dbPath = process.env.JARVIS_DB_PATH || './data/jarvis.db';
@@ -36,9 +36,10 @@ export async function startServer(): Promise<void> {
     async ({ message, project_id, session_id }) => {
       const agent = new JarvisAgent(storage, toolRegistry, {
         dbPath,
+        // Backwards compat: pass env var so JarvisAgent can fall back if no DB config
         anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
         model: process.env.JARVIS_MODEL || 'claude-sonnet-4-20250514',
-        maxTokens: 8192,
+        maxTokens: parseInt(process.env.JARVIS_MAX_TOKENS || '8192', 10),
       });
 
       let sid = session_id;

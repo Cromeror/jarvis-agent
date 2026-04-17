@@ -16,6 +16,7 @@ import {
 } from './commands/project.js';
 import { baseShow, baseEdit, baseSync } from './commands/base.js';
 import { setupCommand } from './commands/setup.js';
+import { aiSetup, aiStatus, aiList, aiActivate, aiSet, aiTest } from './commands/ai.js';
 
 const program = new Command();
 
@@ -170,6 +171,44 @@ integration.command('remove <integration-id>').description('Remove an integratio
   const config = loadConfig();
   const { storage } = bootstrap(config);
   await integrationsRemove(storage, id);
+});
+
+// AI commands
+const ai = program.command('ai').description('Configure AI providers');
+ai.command('setup').description('Interactive AI provider setup').action(async () => {
+  const config = loadConfig();
+  const { storage } = bootstrap(config);
+  await aiSetup(storage);
+});
+ai.command('status').description('Show active AI provider').action(() => {
+  const config = loadConfig();
+  const { storage } = bootstrap(config);
+  aiStatus(storage);
+});
+ai.command('list').description('List configured providers').action(() => {
+  const config = loadConfig();
+  const { storage } = bootstrap(config);
+  aiList(storage);
+});
+ai.command('activate <provider>').description('Activate a provider').action((provider: string) => {
+  const config = loadConfig();
+  const { storage } = bootstrap(config);
+  aiActivate(storage, provider);
+});
+ai.command('set <provider>').description('Configure a provider (non-interactive)')
+  .option('--model <model>', 'Model name')
+  .option('--api-key <key>', 'API key')
+  .option('--base-url <url>', 'Base URL')
+  .option('--no-activate', 'Do not activate after setting')
+  .action((provider: string, opts) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    aiSet(storage, provider, opts);
+  });
+ai.command('test').description('Test active AI provider').action(async () => {
+  const config = loadConfig();
+  const { storage } = bootstrap(config);
+  await aiTest(storage);
 });
 
 // Base commands

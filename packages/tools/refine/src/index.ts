@@ -1,4 +1,5 @@
 import type { Skill, ToolDefinition } from '@jarvis/core';
+import { resolveRulesForTool } from '@jarvis/core';
 import type { Storage } from '@jarvis/storage';
 
 const tools: ToolDefinition[] = [
@@ -51,6 +52,10 @@ const tools: ToolDefinition[] = [
           type: 'string',
           description: 'The feature or epic description to break down into user stories',
         },
+        project_id: {
+          type: 'string',
+          description: 'Optional project ID to load project-specific rules',
+        },
       },
       required: ['feature_description'],
     },
@@ -65,16 +70,15 @@ const tools: ToolDefinition[] = [
           type: 'string',
           description: 'The requirements text to analyze for dependencies',
         },
+        project_id: {
+          type: 'string',
+          description: 'Optional project ID to load project-specific rules',
+        },
       },
       required: ['requirements'],
     },
   },
 ];
-
-function formatRules(rules: { category: string; rule: string; priority: number }[]): string {
-  if (rules.length === 0) return '(No project-specific rules found)';
-  return rules.map((r) => `- [${r.category}] ${r.rule}`).join('\n');
-}
 
 export function createRefineSkill(storage: Storage): Skill {
   async function execute(
@@ -86,18 +90,7 @@ export function createRefineSkill(storage: Storage): Skill {
         const requirements = input['requirements'] as string;
         const projectId = input['project_id'] as string | undefined;
 
-        let rulesSection = '';
-        if (projectId) {
-          const rules = storage.rules.list(projectId, 'refinement');
-          const allRules = rules.length > 0
-            ? rules
-            : storage.rules.list(projectId);
-          rulesSection = [
-            '### Project Rules to Apply',
-            formatRules(allRules),
-            '',
-          ].join('\n');
-        }
+        const rulesSection = resolveRulesForTool(storage, projectId, 'refine_requirements', 'refinement');
 
         return [
           '## Requirements Refinement Analysis',
@@ -121,11 +114,7 @@ export function createRefineSkill(storage: Storage): Skill {
         const ticketDescription = input['ticket_description'] as string;
         const projectId = input['project_id'] as string | undefined;
 
-        let dorRules: string[] = [];
-        if (projectId) {
-          const rules = storage.rules.list(projectId, 'definition_of_ready');
-          dorRules = rules.map((r) => `- ${r.rule}`);
-        }
+        const rulesSection = resolveRulesForTool(storage, projectId, 'check_definition_of_ready', 'definition_of_ready');
 
         const defaultDorCriteria = [
           '- Clear and concise summary that describes the work',
@@ -138,7 +127,7 @@ export function createRefineSkill(storage: Storage): Skill {
           '- Reviewed and approved by product owner',
         ];
 
-        const criteria = dorRules.length > 0 ? dorRules : defaultDorCriteria;
+        const criteria = rulesSection || defaultDorCriteria.join('\n');
 
         return [
           '## Definition of Ready Check',
@@ -147,7 +136,7 @@ export function createRefineSkill(storage: Storage): Skill {
           ticketDescription,
           '',
           '### DoR Criteria to Evaluate',
-          criteria.join('\n'),
+          criteria,
           '',
           '### Instructions',
           'For each criterion above, determine if the ticket description satisfies it.',
@@ -162,6 +151,9 @@ export function createRefineSkill(storage: Storage): Skill {
 
       case 'generate_user_stories': {
         const featureDescription = input['feature_description'] as string;
+        const projectId = input['project_id'] as string | undefined;
+
+        const rulesSection = resolveRulesForTool(storage, projectId, 'generate_user_stories', 'user_stories');
 
         return [
           '## User Story Generation',
@@ -169,6 +161,7 @@ export function createRefineSkill(storage: Storage): Skill {
           '### Feature Description',
           featureDescription,
           '',
+          rulesSection,
           '### Instructions',
           'Break down the feature description into individual user stories following the standard format:',
           '',
@@ -192,6 +185,9 @@ export function createRefineSkill(storage: Storage): Skill {
 
       case 'identify_dependencies': {
         const requirements = input['requirements'] as string;
+        const projectId = input['project_id'] as string | undefined;
+
+        const rulesSection = resolveRulesForTool(storage, projectId, 'identify_dependencies', 'dependencies');
 
         return [
           '## Dependency Analysis',
@@ -199,6 +195,7 @@ export function createRefineSkill(storage: Storage): Skill {
           '### Requirements',
           requirements,
           '',
+          rulesSection,
           '### Instructions',
           'Analyze the requirements above and identify all dependencies. Categorize them as:',
           '',

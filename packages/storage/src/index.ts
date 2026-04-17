@@ -1,5 +1,6 @@
 import type BetterSqlite3 from "better-sqlite3";
 import { initDatabase } from "./database.js";
+import { createAIConfigRepo } from "./repositories/ai-config.js";
 import { createCognitiveRepo } from "./repositories/cognitive.js";
 import { createIntegrationsRepo } from "./repositories/integrations.js";
 import { createKnowledgeRepo } from "./repositories/knowledge.js";
@@ -13,6 +14,7 @@ import { seedDatabase } from "./seed.js";
 
 // Re-export all types
 export type {
+  AIConfig,
   CognitiveBase,
   CreateProjectInput,
   Message,
@@ -47,6 +49,7 @@ export interface Storage {
   sessions: ReturnType<typeof createSessionsRepo>;
   outputs: ReturnType<typeof createOutputsRepo>;
   toolExecutions: ReturnType<typeof createToolExecutionsRepo>;
+  aiConfig: ReturnType<typeof createAIConfigRepo>;
   seed: () => void;
 }
 
@@ -72,6 +75,7 @@ export function createStorage(dbPath: string): Storage {
     sessions: createSessionsRepo(db),
     outputs: createOutputsRepo(db),
     toolExecutions: createToolExecutionsRepo(db),
+    aiConfig: createAIConfigRepo(db),
     seed: () => seedDatabase(db),
   };
 }

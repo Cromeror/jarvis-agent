@@ -9,9 +9,9 @@
     { "path": "../agent" },
     { "path": "../core" },
     { "path": "../storage" },
-    { "path": "../skills/jira" },
-    { "path": "../skills/refine" },
-    { "path": "../skills/code" },
-    { "path": "../skills/n8n" },
+    { "path": "../tools/jira" },
+    { "path": "../tools/refine" },
+    { "path": "../tools/code" },
+    { "path": "../tools/n8n" },
   ]
 }

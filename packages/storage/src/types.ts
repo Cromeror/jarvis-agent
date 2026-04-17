@@ -34,6 +34,7 @@ export interface ProjectRule {
   category: string;
   rule: string;
   priority: number;
+  tool_name: string | null;
 }
 
 export interface ProjectIntegration {
@@ -111,6 +112,17 @@ export interface SaveOutputInput {
   type: string;
   reference?: string | null;
   content: string;
+}
+
+export interface AIConfig {
+  id: number;
+  provider: string;
+  api_key: string | null;
+  base_url: string | null;
+  model: string;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // ---------------------------------------------------------------------------

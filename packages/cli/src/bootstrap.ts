@@ -3,10 +3,10 @@ import { ToolRegistry } from '@jarvis/core';
 import { JarvisAgent } from '@jarvis/agent';
 import { existsSync, readFileSync } from 'node:fs';
 import type { CliConfig } from './config.js';
-import { createJiraSkill } from '@jarvis/skills-jira';
-import { createRefineSkill } from '@jarvis/skills-refine';
-import { createCodeSkill } from '@jarvis/skills-code';
-import { createN8nSkill } from '@jarvis/skills-n8n';
+import { createJiraSkill } from '@jarvis/tools-jira';
+import { createRefineSkill } from '@jarvis/tools-refine';
+import { createCodeSkill } from '@jarvis/tools-code';
+import { createN8nSkill } from '@jarvis/tools-n8n';
 
 export function bootstrap(config: CliConfig) {
   const storage = createStorage(config.dbPath);

@@ -20,10 +20,8 @@ export function loadConfig(): CliConfig {
     mkdirSync(dataDir, { recursive: true });
   }
 
+  // Env var is used as fallback when no AI provider is configured in the DB
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
-  if (!anthropicApiKey) {
-    console.warn('Warning: ANTHROPIC_API_KEY not set. Chat commands will fail.');
-  }
 
   return {
     dbPath,

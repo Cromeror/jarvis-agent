@@ -1,4 +1,5 @@
 import type { Skill, ToolDefinition } from '@jarvis/core';
+import { resolveRulesForTool } from '@jarvis/core';
 import type { Storage } from '@jarvis/storage';
 
 const tools: ToolDefinition[] = [
@@ -64,6 +65,10 @@ const tools: ToolDefinition[] = [
           type: 'string',
           description: 'Testing framework to use (e.g. vitest, jest, pytest, go test)',
         },
+        project_id: {
+          type: 'string',
+          description: 'Optional project ID to load project-specific testing rules',
+        },
       },
       required: ['code'],
     },
@@ -77,6 +82,10 @@ const tools: ToolDefinition[] = [
         diff: {
           type: 'string',
           description: 'The git diff output to generate a commit message for',
+        },
+        project_id: {
+          type: 'string',
+          description: 'Optional project ID to load project-specific commit conventions',
         },
       },
       required: ['diff'],
@@ -96,6 +105,10 @@ const tools: ToolDefinition[] = [
           type: 'string',
           description: 'Optional surrounding code or additional context',
         },
+        project_id: {
+          type: 'string',
+          description: 'Optional project ID to load project-specific debugging context',
+        },
       },
       required: ['error'],
     },
@@ -105,11 +118,6 @@ const tools: ToolDefinition[] = [
 function formatStack(stack: { layer: string; value: string; notes: string | null }[]): string {
   if (stack.length === 0) return '(No stack information available)';
   return stack.map((s) => `- **${s.layer}**: ${s.value}${s.notes ? ` (${s.notes})` : ''}`).join('\n');
-}
-
-function formatRules(rules: { category: string; rule: string }[]): string {
-  if (rules.length === 0) return '(No project-specific conventions found)';
-  return rules.map((r) => `- [${r.category}] ${r.rule}`).join('\n');
 }
 
 export function createCodeSkill(storage: Storage): Skill {
@@ -124,25 +132,17 @@ export function createCodeSkill(storage: Storage): Skill {
         const projectId = input['project_id'] as string | undefined;
 
         let stackSection = '';
-        let conventionsSection = '';
 
         if (projectId) {
           const stack = storage.stack.list(projectId);
-          const rules = storage.rules.list(projectId, 'code');
-          const allRules = rules.length > 0 ? rules : storage.rules.list(projectId);
-
           stackSection = [
             '### Project Stack',
             formatStack(stack),
             '',
           ].join('\n');
-
-          conventionsSection = [
-            '### Project Conventions',
-            formatRules(allRules),
-            '',
-          ].join('\n');
         }
+
+        const conventionsSection = resolveRulesForTool(storage, projectId, 'code_generate', 'code_conventions');
 
         return [
           '## Code Generation Request',
@@ -170,16 +170,7 @@ export function createCodeSkill(storage: Storage): Skill {
         const language = input['language'] as string | undefined;
         const projectId = input['project_id'] as string | undefined;
 
-        let conventionsSection = '';
-        if (projectId) {
-          const rules = storage.rules.list(projectId, 'code');
-          const allRules = rules.length > 0 ? rules : storage.rules.list(projectId);
-          conventionsSection = [
-            '### Project-Specific Conventions',
-            formatRules(allRules),
-            '',
-          ].join('\n');
-        }
+        const conventionsSection = resolveRulesForTool(storage, projectId, 'code_review', 'code_conventions');
 
         return [
           '## Code Review',
@@ -226,6 +217,9 @@ export function createCodeSkill(storage: Storage): Skill {
         const code = input['code'] as string;
         const language = input['language'] as string | undefined;
         const framework = input['framework'] as string | undefined;
+        const projectId = input['project_id'] as string | undefined;
+
+        const rulesSection = resolveRulesForTool(storage, projectId, 'code_generate_tests', 'testing');
 
         return [
           '## Test Generation Request',
@@ -238,6 +232,7 @@ export function createCodeSkill(storage: Storage): Skill {
           code,
           '```',
           '',
+          rulesSection,
           '### Instructions',
           'Generate comprehensive tests for the code above:',
           '',
@@ -257,6 +252,9 @@ export function createCodeSkill(storage: Storage): Skill {
 
       case 'code_generate_commit_message': {
         const diff = input['diff'] as string;
+        const projectId = input['project_id'] as string | undefined;
+
+        const rulesSection = resolveRulesForTool(storage, projectId, 'code_generate_commit_message', 'git');
 
         return [
           '## Commit Message Generation',
@@ -266,6 +264,7 @@ export function createCodeSkill(storage: Storage): Skill {
           diff,
           '```',
           '',
+          rulesSection,
           '### Instructions',
           'Generate a conventional commit message for the diff above.',
           '',
@@ -293,6 +292,9 @@ export function createCodeSkill(storage: Storage): Skill {
       case 'code_debug_error': {
         const error = input['error'] as string;
         const context = input['context'] as string | undefined;
+        const projectId = input['project_id'] as string | undefined;
+
+        const rulesSection = resolveRulesForTool(storage, projectId, 'code_debug_error', 'debugging');
 
         return [
           '## Error Debugging',
@@ -303,6 +305,7 @@ export function createCodeSkill(storage: Storage): Skill {
           '```',
           '',
           context ? ['### Additional Context', '```', context, '```', ''].join('\n') : '',
+          rulesSection,
           '### Debugging Instructions',
           'Analyze the error above and provide:',
           '',
