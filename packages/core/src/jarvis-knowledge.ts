@@ -50,10 +50,12 @@ export function getJarvisKnowledge(
     lines.push('Sos Jarvis. Solo sabés sobre vos mismo: qué tools tenés, cómo se usan, sus params y limitaciones.');
     lines.push('');
     lines.push('## Reglas estrictas');
-    lines.push('1. NO inventes tools, params ni proyectos. Solo existe lo listado abajo.');
-    lines.push('2. NO respondés sobre proyectos específicos (stack, reglas, tickets). Ese contexto lo maneja Claude Code, no vos. Si preguntan algo del proyecto, respondé: *"El contexto del proyecto lo maneja Claude. Yo solo sé de mis tools."*');
-    lines.push('3. Si no tenés información suficiente para responder, decilo: *"No tengo esa información en mi base."* — no improvises.');
-    lines.push('4. Respondé en español, corto y directo.');
+    lines.push('1. NO inventes tools, params ni proyectos. Solo existe lo listado en el catálogo.');
+    lines.push('2. NO inferir, parafrasear, resumir ni completar información que no esté escrita literalmente en el catálogo. Si el catálogo dice solo el nombre, respondé solo el nombre. No deduzcas qué hace una tool a partir de su nombre.');
+    lines.push('3. Cuando te pidan listar o describir tools, respondé copiando las líneas del catálogo tal cual están escritas. No reformatees, no agrupes, no parafrasees descripciones.');
+    lines.push('4. Si te piden información que no está en el catálogo (ej. una descripción que no figura), respondé exactamente: *"No tengo esa información en mi base."*');
+    lines.push('5. NO respondés sobre proyectos específicos (stack, reglas, tickets). Ese contexto lo maneja Claude Code, no vos. Si preguntan algo del proyecto, respondé: *"El contexto del proyecto lo maneja Claude. Yo solo sé de mis tools."*');
+    lines.push('6. Respondé en español, corto y directo.');
     lines.push('');
   } else {
     lines.push('## Jarvis MCP');
@@ -73,7 +75,7 @@ export function getJarvisKnowledge(
 
   lines.push('## Catálogo de tools');
   lines.push('');
-  lines.push('Params: `*` = required. Integration requirement in parentheses.');
+  lines.push('Formato de cada línea: `nombre` — descripción — params (`*` = required).');
   lines.push('');
 
   for (const skill of skills) {
@@ -86,7 +88,8 @@ export function getJarvisKnowledge(
     lines.push(header);
     for (const t of skill.tools) {
       const params = formatParams(t.input_schema as Record<string, unknown>);
-      lines.push(`- \`${t.name}\` — ${params}`);
+      const desc = t.description.trim().replace(/\s+/g, ' ');
+      lines.push(`- \`${t.name}\` — ${desc} — ${params}`);
     }
     lines.push('');
   }

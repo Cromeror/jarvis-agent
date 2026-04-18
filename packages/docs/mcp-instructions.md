@@ -64,6 +64,14 @@ Es idempotente: si nada cambió, no escribe. Correlo cuando:
 
 Si no estás seguro, `jarvis doctor` te avisa si hay drift.
 
+## Después de `jarvis mcp update`
+
+Claude Code arranca el MCP como subprocess persistente por sesión. Los
+cambios en `packages/mcp/dist/` no los toma hasta que **reinicies la
+sesión de Claude Code** en los proyectos donde lo estés usando. Si ves
+respuestas viejas o tools inventadas tras un update, la sesión está
+usando el binario cacheado — reiniciala.
+
 ---
 
 ## Qué escribe `sync`
