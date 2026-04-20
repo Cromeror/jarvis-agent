@@ -1,0 +1,31 @@
+schema: spec-driven
+
+context: |
+  Stack: TypeScript 5.9, Nx 22 monorepo, Node 20, pnpm.
+  Packages: agent, cli, core, docs, http-gateway, mcp, storage, tools.
+  Storage: better-sqlite3. Testing: vitest. LLM: @anthropic-ai/sdk, MCP SDK.
+  CLI: commander + chalk + ora + inquirer. Style: prettier.
+  Convention: run all tasks via `pnpm nx <target> <project>`; no direct tool calls.
+  File names: kebab-case. Commits: conventional.
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Identify affected packages (agent, cli, core, mcp, storage, tools/*)
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Document schema migrations explicitly (better-sqlite3)
+    - Note MCP tool signature changes (breaks consumers)
+  tasks:
+    - Group by phase (schema, storage, tool, mcp, cli, tests)
+    - Hierarchical numbering (1.1, 1.2)
+  apply:
+    - Run tasks via `pnpm nx` — never raw tsc/vitest
+    - Match existing patterns in packages/tools/* and packages/core/*
+  verify:
+    - Run `pnpm nx test <affected>` and `pnpm nx lint <affected>`
+    - Verify each spec scenario end-to-end via CLI or MCP
+  archive:
+    - Warn on destructive schema deltas
