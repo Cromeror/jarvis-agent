@@ -21,6 +21,7 @@ import { toolList, toolRun, toolHelp } from './commands/tool.js';
 import { doctorCommand } from './commands/doctor.js';
 import { n8nExport } from './commands/n8n.js';
 import { mcpInstall, mcpUpdate, mcpUninstall, mcpStatus, mcpSync } from './commands/mcp.js';
+import { refineSave, refineIterate, refineList, refineShow, refineFinalize } from './commands/refine.js';
 
 const program = new Command();
 
@@ -351,6 +352,56 @@ mcp.command('sync')
     const config = loadConfig();
     const { storage, toolRegistry } = bootstrap(config);
     mcpSync(storage, toolRegistry, opts);
+  });
+
+// Refine commands — iterative requirements refinement
+const refine = program.command('refine').description('Gestión de refinamientos iterativos');
+
+refine.command('save <thread-id> <output-file>')
+  .description('Guardar el output de una iteración de refinamiento en un hilo')
+  .option('--instructions <text>', 'Instrucciones de corrección usadas en esta iteración')
+  .option('--requirements <file>', 'Archivo con los requerimientos originales (solo para iteración 1)')
+  .option('-p, --project <id>', 'ID del proyecto')
+  .action(async (threadId: string, outputFile: string, opts: { instructions?: string; requirements?: string; project?: string }) => {
+    const config = loadConfig();
+    const { storage, toolRegistry } = bootstrap(config);
+    await refineSave({ storage, toolRegistry }, threadId, outputFile, opts);
+  });
+
+refine.command('iterate [thread-id]')
+  .description('Generar una nueva iteración de refinamiento de requerimientos')
+  .option('--input <file>', 'Archivo con los requerimientos a refinar (requerido)')
+  .option('--instructions <text>', 'Instrucciones de corrección para esta iteración')
+  .option('-p, --project <id>', 'ID del proyecto')
+  .action(async (threadId: string | undefined, opts: { input?: string; instructions?: string; project?: string }) => {
+    const config = loadConfig();
+    const { storage, toolRegistry } = bootstrap(config);
+    await refineIterate({ storage, toolRegistry }, threadId, opts);
+  });
+
+refine.command('list <thread-id>')
+  .description('Listar todas las iteraciones de un hilo de refinamiento')
+  .action(async (threadId: string) => {
+    const config = loadConfig();
+    const { storage, toolRegistry } = bootstrap(config);
+    await refineList({ storage, toolRegistry }, threadId);
+  });
+
+refine.command('show <thread-id>')
+  .description('Mostrar el output de una iteración (por defecto: la última)')
+  .option('--iteration <n>', 'Número de iteración a mostrar')
+  .action(async (threadId: string, opts: { iteration?: string }) => {
+    const config = loadConfig();
+    const { storage, toolRegistry } = bootstrap(config);
+    await refineShow({ storage, toolRegistry }, threadId, opts);
+  });
+
+refine.command('finalize <thread-id>')
+  .description('Finalizar un hilo de refinamiento (no se admitirán nuevas iteraciones)')
+  .action(async (threadId: string) => {
+    const config = loadConfig();
+    const { storage, toolRegistry } = bootstrap(config);
+    await refineFinalize({ storage, toolRegistry }, threadId);
   });
 
 program.parse();

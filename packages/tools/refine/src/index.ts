@@ -6,7 +6,7 @@ const tools: ToolDefinition[] = [
   {
     name: 'refine_requirements',
     description:
-      'Refines raw requirements using project-specific rules and conventions',
+      'Refina requerimientos crudos contra reglas del proyecto. Para iterar: pasá `thread_id` (UUID) y opcionalmente `instructions` con las correcciones del user y/o `previous_output` con el texto a re-refinar. Si no pasás `previous_output`, el tool carga automáticamente el último output guardado del hilo. Si omitís `thread_id`, el tool genera uno nuevo y lo incluye en un header HTML (`<!-- refine:meta thread_id: … iteration: … -->`) al principio de la respuesta — extraelo para llamadas siguientes. Este tool NO persiste: después de mostrar el resultado al user y obtener aprobación, llamá `refine_save_iteration` con `thread_id` + `output`. Cuando el user confirme que está listo, llamá `refine_finalize`.',
     input_schema: {
       type: 'object',
       properties: {
@@ -17,6 +17,18 @@ const tools: ToolDefinition[] = [
         project_id: {
           type: 'string',
           description: 'Optional project ID to load project-specific rules',
+        },
+        thread_id: {
+          type: 'string',
+          description: 'Optional thread ID for iterative refinement. If provided, the tool loads the latest saved output as context.',
+        },
+        instructions: {
+          type: 'string',
+          description: 'Optional correction instructions from the user for this iteration.',
+        },
+        previous_output: {
+          type: 'string',
+          description: 'Optional explicit previous output to use as context, overriding what is stored in the DB.',
         },
       },
       required: ['requirements'],
@@ -78,6 +90,82 @@ const tools: ToolDefinition[] = [
       required: ['requirements'],
     },
   },
+  {
+    name: 'refine_save_iteration',
+    description:
+      'Persiste el output de una iteración de refinamiento en el hilo indicado. Llamar después de mostrar el resultado de `refine_requirements` al user y obtener aprobación. Lanza error si el hilo ya fue finalizado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        thread_id: {
+          type: 'string',
+          description: 'Thread ID to save the iteration under',
+        },
+        output: {
+          type: 'string',
+          description: 'The refined output text to persist',
+        },
+        instructions: {
+          type: 'string',
+          description: 'Optional correction instructions used in this iteration',
+        },
+        requirements: {
+          type: 'string',
+          description: 'Original requirements (only needed for the first iteration)',
+        },
+        project_id: {
+          type: 'string',
+          description: 'Optional project ID',
+        },
+      },
+      required: ['thread_id', 'output'],
+    },
+  },
+  {
+    name: 'refine_list_iterations',
+    description:
+      'Lista todas las iteraciones de un hilo de refinamiento ordenadas por número de iteración ascendente. Devuelve lista vacía si el hilo no existe.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        thread_id: {
+          type: 'string',
+          description: 'Thread ID to list iterations for',
+        },
+      },
+      required: ['thread_id'],
+    },
+  },
+  {
+    name: 'refine_get_latest',
+    description:
+      'Devuelve la iteración más reciente de un hilo de refinamiento. Devuelve null si el hilo no existe.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        thread_id: {
+          type: 'string',
+          description: 'Thread ID to get the latest iteration for',
+        },
+      },
+      required: ['thread_id'],
+    },
+  },
+  {
+    name: 'refine_finalize',
+    description:
+      'Finaliza un hilo de refinamiento marcando todas sus iteraciones como `final`. Después de finalizar, no se pueden agregar más iteraciones. Idempotente si el hilo ya está finalizado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        thread_id: {
+          type: 'string',
+          description: 'Thread ID to finalize',
+        },
+      },
+      required: ['thread_id'],
+    },
+  },
 ];
 
 export function createRefineSkill(storage: Storage): Skill {
@@ -90,24 +178,95 @@ export function createRefineSkill(storage: Storage): Skill {
         const requirements = input['requirements'] as string;
         const projectId = input['project_id'] as string | undefined;
 
+        // Normalize empty strings to undefined (spec §5)
+        const rawThreadId = input['thread_id'] as string | undefined;
+        const rawInstructions = input['instructions'] as string | undefined;
+        const explicitPrevOutput = input['previous_output'] as string | undefined;
+
+        const threadId = rawThreadId && rawThreadId.trim() !== '' ? rawThreadId : undefined;
+        const instrs = rawInstructions && rawInstructions.trim() !== '' ? rawInstructions : undefined;
+
         const rulesSection = resolveRulesForTool(storage, projectId, 'refine_requirements', 'refinement');
 
-        return [
+        // Legacy behavior: no thread_id provided (R4, E4)
+        if (!threadId) {
+          return [
+            '## Requirements Refinement Analysis',
+            '',
+            '### Input Requirements',
+            requirements,
+            '',
+            rulesSection,
+            '### Refinement Instructions',
+            'Please analyze the requirements above and provide:',
+            '',
+            '1. **Clarified Requirements** — Rewrite each requirement to be specific, measurable, achievable, relevant, and time-bound (SMART).',
+            '2. **Ambiguities Identified** — List any vague or contradictory statements that need clarification.',
+            '3. **Missing Information** — Identify what information is missing to fully specify the requirements.',
+            '4. **Edge Cases** — Highlight potential edge cases that should be addressed.',
+            '5. **Acceptance Criteria** — For each refined requirement, suggest clear acceptance criteria.',
+          ].join('\n');
+        }
+
+        // Iterative path: thread_id present (R2, R3, R10)
+        const base = explicitPrevOutput !== undefined
+          ? explicitPrevOutput
+          : (storage.refinements.getLatest(threadId)?.output ?? null);
+
+        const nextIter = storage.refinements.getNextIteration(threadId);
+
+        // Build HTML comment header (design §4)
+        const header = [
+          '<!-- refine:meta',
+          `thread_id: ${threadId}`,
+          `iteration: ${nextIter}`,
+          `has_base: ${base !== null}`,
+          '-->',
+        ].join('\n');
+
+        // Check if thread is finalized and emit warning (R10, E6)
+        const threadStatus = storage.refinements.getThreadStatus(threadId);
+        const warningSection = threadStatus === 'final'
+          ? `⚠️ Advertencia: el hilo ${threadId} está finalizado. Esta iteración no se podrá persistir hasta reabrirlo.\n\n`
+          : '';
+
+        const bodyParts: string[] = [
           '## Requirements Refinement Analysis',
           '',
-          '### Input Requirements',
-          requirements,
-          '',
-          rulesSection,
-          '### Refinement Instructions',
-          'Please analyze the requirements above and provide:',
-          '',
-          '1. **Clarified Requirements** — Rewrite each requirement to be specific, measurable, achievable, relevant, and time-bound (SMART).',
-          '2. **Ambiguities Identified** — List any vague or contradictory statements that need clarification.',
-          '3. **Missing Information** — Identify what information is missing to fully specify the requirements.',
-          '4. **Edge Cases** — Highlight potential edge cases that should be addressed.',
-          '5. **Acceptance Criteria** — For each refined requirement, suggest clear acceptance criteria.',
-        ].join('\n');
+        ];
+
+        if (base !== null) {
+          bodyParts.push('### Previous Output');
+          bodyParts.push(base);
+          bodyParts.push('');
+        }
+
+        if (instrs) {
+          bodyParts.push('### Correction Instructions');
+          bodyParts.push(instrs);
+          bodyParts.push('');
+        }
+
+        bodyParts.push('### Input Requirements');
+        bodyParts.push(requirements);
+        bodyParts.push('');
+
+        if (rulesSection) {
+          bodyParts.push(rulesSection);
+        }
+
+        bodyParts.push('### Refinement Instructions');
+        bodyParts.push('Please analyze the requirements above and provide:');
+        bodyParts.push('');
+        bodyParts.push('1. **Clarified Requirements** — Rewrite each requirement to be specific, measurable, achievable, relevant, and time-bound (SMART).');
+        bodyParts.push('2. **Ambiguities Identified** — List any vague or contradictory statements that need clarification.');
+        bodyParts.push('3. **Missing Information** — Identify what information is missing to fully specify the requirements.');
+        bodyParts.push('4. **Edge Cases** — Highlight potential edge cases that should be addressed.');
+        bodyParts.push('5. **Acceptance Criteria** — For each refined requirement, suggest clear acceptance criteria.');
+
+        const body = bodyParts.join('\n');
+
+        return `${header}\n\n${warningSection}${body}`;
       }
 
       case 'check_definition_of_ready': {
@@ -222,6 +381,47 @@ export function createRefineSkill(storage: Storage): Skill {
         ].join('\n');
       }
 
+      case 'refine_save_iteration': {
+        const threadId = input['thread_id'] as string;
+        const output = input['output'] as string;
+        const instructions = input['instructions'] as string | undefined;
+        const rawRequirements = input['requirements'] as string | undefined;
+        const projectId = input['project_id'] as string | undefined;
+
+        // Block save if thread is finalized (R9, E5)
+        if (storage.refinements.getThreadStatus(threadId) === 'final') {
+          throw new Error(`El hilo ${threadId} ya está finalizado y no admite nuevas iteraciones`);
+        }
+
+        const row = storage.refinements.save({
+          thread_id: threadId,
+          output,
+          instructions: instructions || null,
+          requirements: rawRequirements || null,
+          project_id: projectId || null,
+        });
+
+        return JSON.stringify(row);
+      }
+
+      case 'refine_list_iterations': {
+        const threadId = input['thread_id'] as string;
+        const rows = storage.refinements.listByThread(threadId);
+        return JSON.stringify(rows);
+      }
+
+      case 'refine_get_latest': {
+        const threadId = input['thread_id'] as string;
+        const row = storage.refinements.getLatest(threadId);
+        return JSON.stringify(row);
+      }
+
+      case 'refine_finalize': {
+        const threadId = input['thread_id'] as string;
+        storage.refinements.finalize(threadId);
+        return JSON.stringify({ thread_id: threadId, status: 'final' });
+      }
+
       default:
         return `Unknown tool: ${toolName}`;
     }
@@ -230,7 +430,7 @@ export function createRefineSkill(storage: Storage): Skill {
   return {
     name: 'refine',
     description:
-      'Refinement skill for analyzing and improving requirements, checking Definition of Ready, generating user stories, and identifying dependencies',
+      'Skill de refinamiento iterativo de requerimientos. Soporta ciclos de "propose → user corrige → re-refine" mediante `thread_id`. Incluye prompt-builders puros (`refine_requirements`, `generate_user_stories`, `identify_dependencies`, `check_definition_of_ready`) y tools de persistencia por hilo (`refine_save_iteration`, `refine_list_iterations`, `refine_get_latest`, `refine_finalize`).',
     tools,
     execute,
   };

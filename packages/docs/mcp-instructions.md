@@ -101,3 +101,87 @@ Si editás el bloque a mano, el próximo `sync` lo sobrescribe. Usá `--check` a
 
 - El bloque no existe → sugiere `jarvis mcp sync`
 - El hash del bloque no coincide con el estado actual → sugiere `jarvis mcp sync`
+
+---
+
+## Flujo iterativo de refine
+
+Las tools `refine_*` soportan un ciclo de refinamiento incremental donde cada iteración parte del output anterior:
+
+```
+refine_requirements (thread_id)
+        |
+        v
+   user review
+        |
+   ¿Correcciones?
+   /            \
+  Sí             No
+  |               |
+  v               v
+refine_requirements    refine_finalize
+(thread_id +           (thread_id)
+ instructions)
+        |
+        v
+ refine_save_iteration
+ (thread_id, output)
+        |
+        v
+   (repetir)
+```
+
+### Usando el CLI
+
+```bash
+# Primera iteración (genera un nuevo thread_id automáticamente)
+jarvis refine iterate --input /ruta/req.txt
+
+# Guardar el output aprobado (copiar el thread_id del paso anterior)
+jarvis refine save <thread_id> /ruta/output1.txt
+
+# Segunda iteración con correcciones
+jarvis refine iterate <thread_id> --input /ruta/req.txt --instructions "hazlo más breve"
+
+# Ver todas las iteraciones del hilo
+jarvis refine list <thread_id>
+
+# Finalizar el hilo
+jarvis refine finalize <thread_id>
+```
+
+### Usando MCP directamente
+
+```jsonc
+// Primera llamada — sin thread_id se genera uno nuevo
+{ "tool": "refine_requirements", "input": { "requirements": "..." } }
+// → Respuesta incluye header: <!-- refine:meta thread_id: <uuid> iteration: 1 has_base: false -->
+
+// Guardar output
+{ "tool": "refine_save_iteration", "input": { "thread_id": "<uuid>", "output": "..." } }
+
+// Segunda iteración con instrucciones de corrección
+{
+  "tool": "refine_requirements",
+  "input": {
+    "requirements": "...",
+    "thread_id": "<uuid>",
+    "instructions": "hazlo más breve"
+  }
+}
+
+// Finalizar
+{ "tool": "refine_finalize", "input": { "thread_id": "<uuid>" } }
+```
+
+### Notas importantes
+
+- **`refine_requirements` es retrocompatible**: sin `thread_id` se comporta exactamente igual que antes — sin header, sin acceso a la base de datos. No hay breaking change.
+- **`previous_output` explícito**: si se pasa `previous_output` en la llamada, ese valor se usa como contexto previo ignorando lo que haya en la base de datos. Útil para casos donde el caller ya tiene el texto disponible en memoria.
+- **Después de actualizar la tool o el catálogo** (por ejemplo, al agregar las nuevas tools `refine_*`), es **obligatorio** correr `jarvis mcp sync` y reiniciar la sesión de Claude Code. Sin este paso, Claude Code usará el catálogo desactualizado y no podrá invocar las nuevas tools.
+
+```bash
+# Después de cualquier cambio en tools o descripciones:
+jarvis mcp sync
+# Luego reiniciar la sesión de Claude Code
+```
