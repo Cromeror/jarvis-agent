@@ -24,7 +24,7 @@ describe('refine storage tools', () => {
       const row = JSON.parse(result) as Record<string, unknown>;
       expect(row['thread_id']).toBe('thread-save-1');
       expect(row['iteration']).toBe(1);
-      expect(row['status']).toBe('draft');
+      expect(row['status']).toBe('in_progress');
       expect(row['output']).toBe('Refined output text');
     });
 
@@ -60,18 +60,36 @@ describe('refine storage tools', () => {
       expect(row2['instructions']).toBe('Be more specific');
     });
 
-    // E5 — save blocked after finalize (R9)
-    it('throws error when trying to save to a finalized thread (E5)', async () => {
-      storage.refinements.save({ thread_id: 'thread-final-block', output: 'some out' });
-      storage.refinements.finalize('thread-final-block');
-
+    // R4 — save on completed thread reopens and persists without error
+    it('save on completed thread reopens all rows and persists new iteration (R4)', async () => {
       const skill = createRefineSkill(storage);
+
+      // Save iter 1 — status should be in_progress
+      const result1 = await skill.execute('refine_save_iteration', {
+        thread_id: 'thread-reopen',
+        output: 'Iteration 1 output',
+      });
+      const row1 = JSON.parse(result1) as Record<string, unknown>;
+      expect(row1['status']).toBe('in_progress');
+
+      // Finalize — all rows become completed
+      storage.refinements.finalize('thread-reopen');
+      expect(storage.refinements.getThreadStatus('thread-reopen')).toBe('completed');
+
+      // Save iter 2 — should NOT throw; should reopen and persist
       await expect(
         skill.execute('refine_save_iteration', {
-          thread_id: 'thread-final-block',
-          output: 'New output',
+          thread_id: 'thread-reopen',
+          output: 'Iteration 2 output after reopen',
         }),
-      ).rejects.toThrow('El hilo thread-final-block ya está finalizado y no admite nuevas iteraciones');
+      ).resolves.toBeTruthy();
+
+      // All rows (including iter 1) should now be in_progress
+      const rows = storage.refinements.listByThread('thread-reopen');
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.status).toBe('in_progress');
+      }
     });
   });
 
@@ -105,6 +123,23 @@ describe('refine storage tools', () => {
 
       const rows = JSON.parse(result) as unknown[];
       expect(rows).toEqual([]);
+    });
+
+    // S11 — list returns rows with status in_progress
+    it('returns rows with status in_progress (S11)', async () => {
+      storage.refinements.save({ thread_id: 'thread-s11', output: 'out1' });
+      storage.refinements.save({ thread_id: 'thread-s11', output: 'out2' });
+
+      const skill = createRefineSkill(storage);
+      const result = await skill.execute('refine_list_iterations', {
+        thread_id: 'thread-s11',
+      });
+
+      const rows = JSON.parse(result) as Array<Record<string, unknown>>;
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row['status']).toBe('in_progress');
+      }
     });
   });
 
@@ -142,7 +177,7 @@ describe('refine storage tools', () => {
   // refine_finalize (task 3.4.3)
   // ---------------------------------------------------------------------------
   describe('refine_finalize', () => {
-    it('finalizes thread and returns JSON with status=final', async () => {
+    it('finalizes thread and returns JSON with status=completed', async () => {
       storage.refinements.save({ thread_id: 'thread-to-finalize', output: 'out' });
 
       const skill = createRefineSkill(storage);
@@ -152,10 +187,10 @@ describe('refine storage tools', () => {
 
       const obj = JSON.parse(result) as Record<string, unknown>;
       expect(obj['thread_id']).toBe('thread-to-finalize');
-      expect(obj['status']).toBe('final');
+      expect(obj['status']).toBe('completed');
 
       // Verify DB state
-      expect(storage.refinements.getThreadStatus('thread-to-finalize')).toBe('final');
+      expect(storage.refinements.getThreadStatus('thread-to-finalize')).toBe('completed');
     });
 
     // Idempotent on double call (spec §5)
@@ -171,7 +206,7 @@ describe('refine storage tools', () => {
 
       const result = await skill.execute('refine_finalize', { thread_id: 'thread-idem' });
       const obj = JSON.parse(result) as Record<string, unknown>;
-      expect(obj['status']).toBe('final');
+      expect(obj['status']).toBe('completed');
     });
 
     // Error on non-existent thread (spec §5)

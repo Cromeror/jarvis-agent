@@ -13,6 +13,23 @@ export function initDatabase(dbPath: string): BetterSqlite3.Database {
   db.pragma("foreign_keys = ON");
 
   // ------------------------------------------------------------------
+  // Pre-schema migrations (destructive — must run before CREATE TABLE)
+  // ------------------------------------------------------------------
+
+  // D4: if the refinements table has the old CHECK ('draft','final'),
+  // drop it so the CREATE TABLE IF NOT EXISTS below recreates it with the new CHECK.
+  try {
+    const tableSchema = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='refinements'")
+      .get() as { sql?: string } | undefined;
+    if (tableSchema?.sql?.includes("'draft'")) {
+      db.exec('DROP TABLE refinements');
+    }
+  } catch {
+    // No-op: table doesn't exist or drop failed — CREATE below handles it.
+  }
+
+  // ------------------------------------------------------------------
   // Schema
   // ------------------------------------------------------------------
 
@@ -138,8 +155,8 @@ export function initDatabase(dbPath: string): BetterSqlite3.Database {
       requirements  TEXT,
       instructions  TEXT,
       output        TEXT,
-      status        TEXT    NOT NULL DEFAULT 'draft'
-                    CHECK(status IN ('draft','final')),
+      status        TEXT    NOT NULL DEFAULT 'in_progress'
+                    CHECK(status IN ('in_progress','completed')),
       parent_id     INTEGER          REFERENCES refinements(id) ON DELETE SET NULL,
       created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
       UNIQUE(thread_id, iteration)

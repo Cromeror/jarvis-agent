@@ -155,7 +155,7 @@ jarvis refine finalize <thread_id>
 ```jsonc
 // Primera llamada — sin thread_id se genera uno nuevo
 { "tool": "refine_requirements", "input": { "requirements": "..." } }
-// → Respuesta incluye header: <!-- refine:meta thread_id: <uuid> iteration: 1 has_base: false -->
+// → Respuesta incluye header: <!-- refine:meta thread_id: <uuid> iteration: 1 -->
 
 // Guardar output
 { "tool": "refine_save_iteration", "input": { "thread_id": "<uuid>", "output": "..." } }
@@ -176,8 +176,10 @@ jarvis refine finalize <thread_id>
 
 ### Notas importantes
 
-- **`refine_requirements` es retrocompatible**: sin `thread_id` se comporta exactamente igual que antes — sin header, sin acceso a la base de datos. No hay breaking change.
+- **`refine_requirements` sin `thread_id`**: genera automáticamente un `thread_id` UUID y retorna un header meta (`<!-- refine:meta thread_id: <uuid> iteration: 1 -->`) al inicio del prompt. No persiste nada en la base de datos — el `thread_id` es una "promesa de hilo" que se materializa cuando el agente llama a `refine_save_iteration`. Ideal para iniciar un ciclo de refinamiento sin necesidad de parámetros adicionales.
 - **`previous_output` explícito**: si se pasa `previous_output` en la llamada, ese valor se usa como contexto previo ignorando lo que haya en la base de datos. Útil para casos donde el caller ya tiene el texto disponible en memoria.
+- **Reapertura implícita**: cuando `refine_save_iteration` se invoca sobre un hilo cuyo status es `completed` (finalizado), la tool automáticamente reabre el hilo — todas las iteraciones transicionan de `completed` a `in_progress` y la nueva iteración se persiste con status `in_progress`, en una sola transacción. No hay tool separada ni error; es un comportamiento transparente que permite reanudar refinamientos tras finalizar.
+- **Estados del hilo**: cada iteración tiene `status` que refleja el estado del hilo: `'in_progress'` (puede recibir nuevas iteraciones) o `'completed'` (finalizado, pero reabre si se persiste una nueva iteración).
 - **Después de actualizar la tool o el catálogo** (por ejemplo, al agregar las nuevas tools `refine_*`), es **obligatorio** correr `jarvis mcp sync` y reiniciar la sesión de Claude Code. Sin este paso, Claude Code usará el catálogo desactualizado y no podrá invocar las nuevas tools.
 
 ```bash

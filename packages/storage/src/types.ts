@@ -160,7 +160,7 @@ export interface RefinementRow {
   requirements: string | null;
   instructions: string | null;
   output: string | null;
-  status: 'draft' | 'final';
+  status: 'in_progress' | 'completed';
   parent_id: number | null;
   created_at: string;
 }

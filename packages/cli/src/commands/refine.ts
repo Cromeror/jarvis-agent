@@ -1,6 +1,5 @@
 import chalk from 'chalk';
 import { readFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import type { Storage } from '@jarvis/storage';
 import type { ToolRegistry } from '@jarvis/core';
 
@@ -52,12 +51,7 @@ export async function refineSave(
     result = await ctx.toolRegistry.execute('refine_save_iteration', input);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Translate known English error patterns to Spanish
-    const translated = msg
-      .replace(/Thread (.+) no existe/, 'El hilo $1 no existe')
-      .replace(/El hilo (.+) ya está finalizado y no admite nuevas iteraciones/,
-        'El hilo $1 ya está finalizado y no admite nuevas iteraciones');
-    console.error(chalk.red(`Error: ${translated}`));
+    console.error(chalk.red(`Error: ${msg}`));
     process.exit(1);
   }
 
@@ -99,15 +93,8 @@ export async function refineIterate(
     process.exit(1);
   }
 
-  const resolvedThreadId = threadId ?? randomUUID();
-  if (!threadId) {
-    console.log(chalk.cyan(`Nuevo hilo: ${resolvedThreadId}`));
-  }
-
-  const input: Record<string, unknown> = {
-    requirements,
-    thread_id: resolvedThreadId,
-  };
+  const input: Record<string, unknown> = { requirements };
+  if (threadId) input['thread_id'] = threadId;
   if (opts.instructions) input['instructions'] = opts.instructions;
   if (opts.project) input['project_id'] = opts.project;
 
@@ -118,6 +105,20 @@ export async function refineIterate(
     const msg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Error al refinar requerimientos: ${msg}`));
     process.exit(1);
+  }
+
+  // Resolve thread_id: from --thread flag or extracted from header (one-shot path)
+  let resolvedThreadId: string;
+  if (threadId) {
+    resolvedThreadId = threadId;
+  } else {
+    const headerMatch = prompt.match(/<!-- refine:meta\s*\n\s*thread_id:\s*(\S+)/);
+    if (!headerMatch) {
+      console.error(chalk.red('Error: no se pudo extraer el thread_id del header de la respuesta.'));
+      process.exit(1);
+    }
+    resolvedThreadId = headerMatch[1];
+    console.log(chalk.cyan(`Nuevo hilo: ${resolvedThreadId}`));
   }
 
   console.log(prompt);
@@ -176,7 +177,7 @@ export async function refineList(
     const rawOutput = row.output ?? '';
     const preview = rawOutput.replace(/\n/g, ' ').slice(0, 60) + (rawOutput.length > 60 ? '…' : '');
     const statusPadded = row.status.padEnd(10);
-    const statusColored = row.status === 'final' ? chalk.green(statusPadded) : chalk.yellow(statusPadded);
+    const statusColored = row.status === 'completed' ? chalk.green(statusPadded) : chalk.yellow(statusPadded);
     console.log(
       `${String(row.iteration).padEnd(6)}${statusColored}${row.created_at.slice(0, 19).padEnd(22)}${preview}`,
     );

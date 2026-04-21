@@ -30,11 +30,15 @@ export function createRefinementsRepo(db: BetterSqlite3.Database) {
   );
 
   const stmtGetThreadStatus = db.prepare<[string], { status: string }>(
-    `SELECT status FROM refinements WHERE thread_id = ? LIMIT 1`,
+    `SELECT status FROM refinements WHERE thread_id = ? ORDER BY iteration DESC LIMIT 1`,
   );
 
   const stmtFinalize = db.prepare<[string]>(
-    `UPDATE refinements SET status = 'final' WHERE thread_id = ?`,
+    `UPDATE refinements SET status = 'completed' WHERE thread_id = ?`,
+  );
+
+  const stmtReopenThread = db.prepare<[string]>(
+    `UPDATE refinements SET status = 'in_progress' WHERE thread_id = ?`,
   );
 
   // ---------------------------------------------------------------------------
@@ -52,6 +56,11 @@ export function createRefinementsRepo(db: BetterSqlite3.Database) {
 
   function save(input: SaveRefinementInput): RefinementRow {
     return db.transaction((): RefinementRow => {
+      const currentStatus = getThreadStatus(input.thread_id);
+      if (currentStatus === 'completed') {
+        stmtReopenThread.run(input.thread_id);
+      }
+
       const iteration = getNextIteration(input.thread_id);
       const latest = getLatest(input.thread_id);
       const parentId = latest?.id ?? null;
@@ -74,10 +83,10 @@ export function createRefinementsRepo(db: BetterSqlite3.Database) {
     return stmtListByThread.all(threadId);
   }
 
-  function getThreadStatus(threadId: string): 'draft' | 'final' | null {
+  function getThreadStatus(threadId: string): 'in_progress' | 'completed' | null {
     const row = stmtGetThreadStatus.get(threadId);
     if (!row) return null;
-    return row.status as 'draft' | 'final';
+    return row.status as 'in_progress' | 'completed';
   }
 
   function finalize(threadId: string): void {

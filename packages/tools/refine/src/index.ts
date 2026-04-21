@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Skill, ToolDefinition } from '@jarvis/core';
 import { resolveRulesForTool } from '@jarvis/core';
 import type { Storage } from '@jarvis/storage';
@@ -188,9 +189,16 @@ export function createRefineSkill(storage: Storage): Skill {
 
         const rulesSection = resolveRulesForTool(storage, projectId, 'refine_requirements', 'refinement');
 
-        // Legacy behavior: no thread_id provided (R4, E4)
+        // One-shot path: no thread_id provided (R1, D5)
         if (!threadId) {
-          return [
+          const newThreadId = randomUUID();
+          const header = [
+            '<!-- refine:meta',
+            `thread_id: ${newThreadId}`,
+            'iteration: 1',
+            '-->',
+          ].join('\n');
+          const body = [
             '## Requirements Refinement Analysis',
             '',
             '### Input Requirements',
@@ -206,6 +214,7 @@ export function createRefineSkill(storage: Storage): Skill {
             '4. **Edge Cases** — Highlight potential edge cases that should be addressed.',
             '5. **Acceptance Criteria** — For each refined requirement, suggest clear acceptance criteria.',
           ].join('\n');
+          return `${header}\n\n${body}`;
         }
 
         // Iterative path: thread_id present (R2, R3, R10)
@@ -215,20 +224,13 @@ export function createRefineSkill(storage: Storage): Skill {
 
         const nextIter = storage.refinements.getNextIteration(threadId);
 
-        // Build HTML comment header (design §4)
+        // Build HTML comment header (design §4, D2 — no has_base)
         const header = [
           '<!-- refine:meta',
           `thread_id: ${threadId}`,
           `iteration: ${nextIter}`,
-          `has_base: ${base !== null}`,
           '-->',
         ].join('\n');
-
-        // Check if thread is finalized and emit warning (R10, E6)
-        const threadStatus = storage.refinements.getThreadStatus(threadId);
-        const warningSection = threadStatus === 'final'
-          ? `⚠️ Advertencia: el hilo ${threadId} está finalizado. Esta iteración no se podrá persistir hasta reabrirlo.\n\n`
-          : '';
 
         const bodyParts: string[] = [
           '## Requirements Refinement Analysis',
@@ -247,10 +249,6 @@ export function createRefineSkill(storage: Storage): Skill {
           bodyParts.push('');
         }
 
-        bodyParts.push('### Input Requirements');
-        bodyParts.push(requirements);
-        bodyParts.push('');
-
         if (rulesSection) {
           bodyParts.push(rulesSection);
         }
@@ -266,7 +264,7 @@ export function createRefineSkill(storage: Storage): Skill {
 
         const body = bodyParts.join('\n');
 
-        return `${header}\n\n${warningSection}${body}`;
+        return `${header}\n\n${body}`;
       }
 
       case 'check_definition_of_ready': {
@@ -388,11 +386,6 @@ export function createRefineSkill(storage: Storage): Skill {
         const rawRequirements = input['requirements'] as string | undefined;
         const projectId = input['project_id'] as string | undefined;
 
-        // Block save if thread is finalized (R9, E5)
-        if (storage.refinements.getThreadStatus(threadId) === 'final') {
-          throw new Error(`El hilo ${threadId} ya está finalizado y no admite nuevas iteraciones`);
-        }
-
         const row = storage.refinements.save({
           thread_id: threadId,
           output,
@@ -419,7 +412,8 @@ export function createRefineSkill(storage: Storage): Skill {
       case 'refine_finalize': {
         const threadId = input['thread_id'] as string;
         storage.refinements.finalize(threadId);
-        return JSON.stringify({ thread_id: threadId, status: 'final' });
+        const status = storage.refinements.getLatest(threadId)?.status ?? 'completed';
+        return JSON.stringify({ thread_id: threadId, status });
       }
 
       default:
