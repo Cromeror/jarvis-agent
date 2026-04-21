@@ -6,6 +6,7 @@ import { createIntegrationsRepo } from "./repositories/integrations.js";
 import { createKnowledgeRepo } from "./repositories/knowledge.js";
 import { createOutputsRepo } from "./repositories/outputs.js";
 import { createProjectsRepo } from "./repositories/projects.js";
+import { createRefinementsRepo } from "./repositories/refinements.js";
 import { createRulesRepo } from "./repositories/rules.js";
 import { createSessionsRepo } from "./repositories/sessions.js";
 import { createStackRepo } from "./repositories/stack.js";
@@ -28,7 +29,9 @@ export type {
   ProjectKnowledge,
   ProjectRule,
   ProjectStack,
+  RefinementRow,
   SaveOutputInput,
+  SaveRefinementInput,
   ServiceConfig,
   Session,
   ToolExecution,
@@ -55,6 +58,7 @@ export interface Storage {
   outputs: ReturnType<typeof createOutputsRepo>;
   toolExecutions: ReturnType<typeof createToolExecutionsRepo>;
   aiConfig: ReturnType<typeof createAIConfigRepo>;
+  refinements: ReturnType<typeof createRefinementsRepo>;
   seed: () => void;
 }
 
@@ -81,6 +85,7 @@ export function createStorage(dbPath: string): Storage {
     outputs: createOutputsRepo(db),
     toolExecutions: createToolExecutionsRepo(db),
     aiConfig: createAIConfigRepo(db),
+    refinements: createRefinementsRepo(db),
     seed: () => seedDatabase(db),
   };
 }

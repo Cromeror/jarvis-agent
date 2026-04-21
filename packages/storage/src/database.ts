@@ -129,6 +129,25 @@ export function initDatabase(dbPath: string): BetterSqlite3.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS refinements (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      thread_id     TEXT    NOT NULL,
+      iteration     INTEGER NOT NULL,
+      project_id    TEXT             REFERENCES projects(id) ON DELETE SET NULL,
+      requirements  TEXT,
+      instructions  TEXT,
+      output        TEXT,
+      status        TEXT    NOT NULL DEFAULT 'draft'
+                    CHECK(status IN ('draft','final')),
+      parent_id     INTEGER          REFERENCES refinements(id) ON DELETE SET NULL,
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(thread_id, iteration)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_refinements_thread_id ON refinements(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_refinements_project_id ON refinements(project_id);
+    CREATE INDEX IF NOT EXISTS idx_refinements_status ON refinements(status);
   `);
 
   // ------------------------------------------------------------------

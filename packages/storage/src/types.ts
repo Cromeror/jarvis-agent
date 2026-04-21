@@ -152,6 +152,27 @@ export interface AIConfig {
   updated_at: string;
 }
 
+export interface RefinementRow {
+  id: number;
+  thread_id: string;
+  iteration: number;
+  project_id: string | null;
+  requirements: string | null;
+  instructions: string | null;
+  output: string | null;
+  status: 'draft' | 'final';
+  parent_id: number | null;
+  created_at: string;
+}
+
+export interface SaveRefinementInput {
+  thread_id: string;
+  project_id?: string | null;
+  requirements?: string | null;
+  instructions?: string | null;
+  output: string;
+}
+
 // ---------------------------------------------------------------------------
 // Composite types
 // ---------------------------------------------------------------------------
