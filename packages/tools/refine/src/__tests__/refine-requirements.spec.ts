@@ -19,7 +19,7 @@ describe('refine_requirements tool', () => {
 
     expect(result).toContain('<!-- refine:meta');
     expect(result).toContain('iteration: 1');
-    expect(result).toContain('## Requirements Refinement Analysis');
+    expect(result).toContain('## Análisis de Refinamiento de Requerimientos');
     expect(result).toContain('The system shall allow users to log in.');
   });
 
@@ -60,7 +60,7 @@ describe('refine_requirements tool', () => {
     });
 
     expect(result).toContain('<!-- refine:meta');
-    expect(result).toContain('## Requirements Refinement Analysis');
+    expect(result).toContain('## Análisis de Refinamiento de Requerimientos');
   });
 
   // 2.7.2 — With new thread_id (no rows): header with iteration=1, no has_base
@@ -75,8 +75,8 @@ describe('refine_requirements tool', () => {
     expect(result).toContain('thread_id: thread-new-001');
     expect(result).toContain('iteration: 1');
     expect(result).not.toContain('has_base');
-    expect(result).toContain('## Requirements Refinement Analysis');
-    expect(result).not.toContain('### Previous Output');
+    expect(result).toContain('## Análisis de Refinamiento de Requerimientos');
+    expect(result).not.toContain('### Output Previo');
   });
 
   // 2.7.3 — With existing thread_id and no previous_output: base from getLatest
@@ -96,7 +96,7 @@ describe('refine_requirements tool', () => {
     expect(result).toContain('<!-- refine:meta');
     expect(result).not.toContain('has_base');
     expect(result).toContain('iteration: 2');
-    expect(result).toContain('### Previous Output');
+    expect(result).toContain('### Output Previo');
     expect(result).toContain('Refined output from iteration 1');
   });
 
@@ -116,7 +116,7 @@ describe('refine_requirements tool', () => {
     });
 
     expect(result).not.toContain('has_base');
-    expect(result).toContain('### Previous Output');
+    expect(result).toContain('### Output Previo');
     expect(result).toContain('Explicit override output');
     expect(result).not.toContain('DB output that should be ignored');
   });
@@ -129,8 +129,8 @@ describe('refine_requirements tool', () => {
       thread_id: 'thread-iter-no-input-req',
     });
 
-    expect(result).not.toContain('### Input Requirements');
-    expect(result).toContain('### Refinement Instructions');
+    expect(result).not.toContain('### Requerimientos de Entrada');
+    expect(result).toContain('### Instrucciones de Refinamiento');
   });
 
   // R3 — Iterative path over completed thread does NOT contain warning
@@ -150,7 +150,7 @@ describe('refine_requirements tool', () => {
     expect(result).not.toContain('Advertencia');
     expect(result).not.toContain('finalizado');
     expect(result).toContain('<!-- refine:meta');
-    expect(result).toContain('## Requirements Refinement Analysis');
+    expect(result).toContain('## Análisis de Refinamiento de Requerimientos');
   });
 
   // Instructions included in body when provided
@@ -162,7 +162,7 @@ describe('refine_requirements tool', () => {
       instructions: 'Make it shorter',
     });
 
-    expect(result).toContain('### Correction Instructions');
+    expect(result).toContain('### Instrucciones de Corrección');
     expect(result).toContain('Make it shorter');
   });
 
@@ -175,7 +175,7 @@ describe('refine_requirements tool', () => {
       instructions: '',
     });
 
-    expect(result).not.toContain('### Correction Instructions');
+    expect(result).not.toContain('### Instrucciones de Corrección');
   });
 
   // D3 — refine_finalize returns { thread_id, status: 'completed' }

@@ -7,29 +7,29 @@ const tools: ToolDefinition[] = [
   {
     name: 'refine_requirements',
     description:
-      'Refina requerimientos crudos contra reglas del proyecto. Para iterar: pasá `thread_id` (UUID) y opcionalmente `instructions` con las correcciones del user y/o `previous_output` con el texto a re-refinar. Si no pasás `previous_output`, el tool carga automáticamente el último output guardado del hilo. Si omitís `thread_id`, el tool genera uno nuevo y lo incluye en un header HTML (`<!-- refine:meta thread_id: … iteration: … -->`) al principio de la respuesta — extraelo para llamadas siguientes. Este tool NO persiste: después de mostrar el resultado al user y obtener aprobación, llamá `refine_save_iteration` con `thread_id` + `output`. Cuando el user confirme que está listo, llamá `refine_finalize`.',
+      'Genera un prompt estructurado de refinamiento de requerimientos contra reglas del proyecto. **Esta tool NO ejecuta el análisis** — devuelve un scaffold que el agente invocador debe procesar con su propio LLM, produciendo las 5 secciones listadas (Requerimientos Clarificados, Ambigüedades, Información Faltante, Casos Límite, Criterios de Aceptación). Para iterar: pasá `thread_id` (UUID) y opcionalmente `instructions` con las correcciones del user y/o `previous_output` con el texto a re-refinar. Si no pasás `previous_output`, el tool carga automáticamente el último output guardado del hilo. Si omitís `thread_id`, el tool genera uno nuevo y lo incluye en un header HTML (`<!-- refine:meta thread_id: … iteration: … -->`) al principio de la respuesta — extraelo para llamadas siguientes. Este tool NO persiste: después de mostrar el resultado al user y obtener aprobación, llamá `refine_save_iteration` con `thread_id` + `output`. Cuando el user confirme que está listo, llamá `refine_finalize`.',
     input_schema: {
       type: 'object',
       properties: {
         requirements: {
           type: 'string',
-          description: 'The raw requirements text to refine',
+          description: 'Texto crudo de los requerimientos a refinar',
         },
         project_id: {
           type: 'string',
-          description: 'Optional project ID to load project-specific rules',
+          description: 'Project ID opcional para cargar reglas específicas del proyecto',
         },
         thread_id: {
           type: 'string',
-          description: 'Optional thread ID for iterative refinement. If provided, the tool loads the latest saved output as context.',
+          description: 'Thread ID opcional para refinamiento iterativo. Si se provee, el tool carga el último output guardado como contexto.',
         },
         instructions: {
           type: 'string',
-          description: 'Optional correction instructions from the user for this iteration.',
+          description: 'Instrucciones de corrección opcionales del user para esta iteración.',
         },
         previous_output: {
           type: 'string',
-          description: 'Optional explicit previous output to use as context, overriding what is stored in the DB.',
+          description: 'Output previo explícito opcional a usar como contexto, anulando lo que está en DB.',
         },
       },
       required: ['requirements'],
@@ -38,17 +38,17 @@ const tools: ToolDefinition[] = [
   {
     name: 'check_definition_of_ready',
     description:
-      'Checks a ticket description against the Definition of Ready rules for a project',
+      'Genera un prompt para verificar una descripción de ticket contra las reglas de Definition of Ready del proyecto. **Esta tool NO ejecuta el análisis** — devuelve un scaffold que el agente invocador debe procesar con su propio LLM.',
     input_schema: {
       type: 'object',
       properties: {
         ticket_description: {
           type: 'string',
-          description: 'The ticket description to evaluate',
+          description: 'Descripción del ticket a evaluar',
         },
         project_id: {
           type: 'string',
-          description: 'Optional project ID to load DoR rules',
+          description: 'Project ID opcional para cargar reglas de DoR',
         },
       },
       required: ['ticket_description'],
@@ -57,17 +57,17 @@ const tools: ToolDefinition[] = [
   {
     name: 'generate_user_stories',
     description:
-      'Generates well-structured user stories from a feature description',
+      'Genera un prompt para descomponer una descripción de feature en historias de usuario bien estructuradas. **Esta tool NO ejecuta el análisis** — devuelve un scaffold que el agente invocador debe procesar con su propio LLM.',
     input_schema: {
       type: 'object',
       properties: {
         feature_description: {
           type: 'string',
-          description: 'The feature or epic description to break down into user stories',
+          description: 'Descripción del feature o épica a descomponer en historias de usuario',
         },
         project_id: {
           type: 'string',
-          description: 'Optional project ID to load project-specific rules',
+          description: 'Project ID opcional para cargar reglas específicas del proyecto',
         },
       },
       required: ['feature_description'],
@@ -75,17 +75,17 @@ const tools: ToolDefinition[] = [
   },
   {
     name: 'identify_dependencies',
-    description: 'Identifies technical and functional dependencies in a set of requirements',
+    description: 'Genera un prompt para identificar dependencias técnicas y funcionales en un conjunto de requerimientos. **Esta tool NO ejecuta el análisis** — devuelve un scaffold que el agente invocador debe procesar con su propio LLM.',
     input_schema: {
       type: 'object',
       properties: {
         requirements: {
           type: 'string',
-          description: 'The requirements text to analyze for dependencies',
+          description: 'Texto de requerimientos a analizar en busca de dependencias',
         },
         project_id: {
           type: 'string',
-          description: 'Optional project ID to load project-specific rules',
+          description: 'Project ID opcional para cargar reglas específicas del proyecto',
         },
       },
       required: ['requirements'],
@@ -199,20 +199,26 @@ export function createRefineSkill(storage: Storage): Skill {
             '-->',
           ].join('\n');
           const body = [
-            '## Requirements Refinement Analysis',
+            '### Tu Tarea',
             '',
-            '### Input Requirements',
+            'Sos el analizador. Usando el contenido abajo, generá las secciones pedidas en **### Instrucciones de Refinamiento**. No repitas el scaffold — reemplazá cada ítem numerado con tu análisis real. Respondé en español.',
+            '',
+            'Después de generar el análisis, el agente orquestador debe llamar refine_save_iteration(thread_id, output) con tu respuesta.',
+            '',
+            '## Análisis de Refinamiento de Requerimientos',
+            '',
+            '### Requerimientos de Entrada',
             requirements,
             '',
             rulesSection,
-            '### Refinement Instructions',
-            'Please analyze the requirements above and provide:',
+            '### Instrucciones de Refinamiento',
+            'Analizá los requerimientos anteriores y entregá:',
             '',
-            '1. **Clarified Requirements** — Rewrite each requirement to be specific, measurable, achievable, relevant, and time-bound (SMART).',
-            '2. **Ambiguities Identified** — List any vague or contradictory statements that need clarification.',
-            '3. **Missing Information** — Identify what information is missing to fully specify the requirements.',
-            '4. **Edge Cases** — Highlight potential edge cases that should be addressed.',
-            '5. **Acceptance Criteria** — For each refined requirement, suggest clear acceptance criteria.',
+            '1. **Requerimientos Clarificados** — Reescribí cada requerimiento para que sea específico, medible, alcanzable, relevante y acotado en el tiempo (SMART).',
+            '2. **Ambigüedades Identificadas** — Listá cualquier declaración vaga o contradictoria que requiera clarificación.',
+            '3. **Información Faltante** — Identificá qué información falta para especificar los requerimientos completamente.',
+            '4. **Casos Límite** — Destacá posibles casos límite que deben ser considerados.',
+            '5. **Criterios de Aceptación** — Para cada requerimiento refinado, sugerí criterios de aceptación claros.',
           ].join('\n');
           return `${header}\n\n${body}`;
         }
@@ -233,18 +239,24 @@ export function createRefineSkill(storage: Storage): Skill {
         ].join('\n');
 
         const bodyParts: string[] = [
-          '## Requirements Refinement Analysis',
+          '### Tu Tarea',
+          '',
+          'Sos el analizador. Usando el contenido abajo, generá las secciones pedidas en **### Instrucciones de Refinamiento**. No repitas el scaffold — reemplazá cada ítem numerado con tu análisis real. Respondé en español.',
+          '',
+          'Después de generar el análisis, el agente orquestador debe llamar refine_save_iteration(thread_id, output) con tu respuesta.',
+          '',
+          '## Análisis de Refinamiento de Requerimientos',
           '',
         ];
 
         if (base !== null) {
-          bodyParts.push('### Previous Output');
+          bodyParts.push('### Output Previo');
           bodyParts.push(base);
           bodyParts.push('');
         }
 
         if (instrs) {
-          bodyParts.push('### Correction Instructions');
+          bodyParts.push('### Instrucciones de Corrección');
           bodyParts.push(instrs);
           bodyParts.push('');
         }
@@ -253,14 +265,14 @@ export function createRefineSkill(storage: Storage): Skill {
           bodyParts.push(rulesSection);
         }
 
-        bodyParts.push('### Refinement Instructions');
-        bodyParts.push('Please analyze the requirements above and provide:');
+        bodyParts.push('### Instrucciones de Refinamiento');
+        bodyParts.push('Analizá los requerimientos anteriores y entregá:');
         bodyParts.push('');
-        bodyParts.push('1. **Clarified Requirements** — Rewrite each requirement to be specific, measurable, achievable, relevant, and time-bound (SMART).');
-        bodyParts.push('2. **Ambiguities Identified** — List any vague or contradictory statements that need clarification.');
-        bodyParts.push('3. **Missing Information** — Identify what information is missing to fully specify the requirements.');
-        bodyParts.push('4. **Edge Cases** — Highlight potential edge cases that should be addressed.');
-        bodyParts.push('5. **Acceptance Criteria** — For each refined requirement, suggest clear acceptance criteria.');
+        bodyParts.push('1. **Requerimientos Clarificados** — Reescribí cada requerimiento para que sea específico, medible, alcanzable, relevante y acotado en el tiempo (SMART).');
+        bodyParts.push('2. **Ambigüedades Identificadas** — Listá cualquier declaración vaga o contradictoria que requiera clarificación.');
+        bodyParts.push('3. **Información Faltante** — Identificá qué información falta para especificar los requerimientos completamente.');
+        bodyParts.push('4. **Casos Límite** — Destacá posibles casos límite que deben ser considerados.');
+        bodyParts.push('5. **Criterios de Aceptación** — Para cada requerimiento refinado, sugerí criterios de aceptación claros.');
 
         const body = bodyParts.join('\n');
 
@@ -274,35 +286,39 @@ export function createRefineSkill(storage: Storage): Skill {
         const rulesSection = resolveRulesForTool(storage, projectId, 'check_definition_of_ready', 'definition_of_ready');
 
         const defaultDorCriteria = [
-          '- Clear and concise summary that describes the work',
-          '- Detailed description explaining the problem or feature',
-          '- Specific, testable acceptance criteria',
-          '- Story point estimate provided',
-          '- Priority level set',
-          '- No unresolved blocking dependencies',
-          '- Assigned to the correct component/team',
-          '- Reviewed and approved by product owner',
+          '- Resumen claro y conciso que describa el trabajo',
+          '- Descripción detallada que explique el problema o feature',
+          '- Criterios de aceptación específicos y testeables',
+          '- Estimación en story points provista',
+          '- Nivel de prioridad definido',
+          '- Sin dependencias bloqueantes sin resolver',
+          '- Asignado al componente/equipo correcto',
+          '- Revisado y aprobado por el product owner',
         ];
 
         const criteria = rulesSection || defaultDorCriteria.join('\n');
 
         return [
-          '## Definition of Ready Check',
+          '### Tu Tarea',
           '',
-          '### Ticket Description',
+          'Sos el evaluador. Analizá la descripción del ticket abajo contra los criterios de DoR y respondé en español con el formato indicado en **### Instrucciones**. No repitas el scaffold.',
+          '',
+          '## Verificación de Definition of Ready',
+          '',
+          '### Descripción del Ticket',
           ticketDescription,
           '',
-          '### DoR Criteria to Evaluate',
+          '### Criterios de DoR a Evaluar',
           criteria,
           '',
-          '### Instructions',
-          'For each criterion above, determine if the ticket description satisfies it.',
-          'Respond with:',
-          '- ✅ PASS — criterion is clearly met',
-          '- ❌ FAIL — criterion is not met (explain what is missing)',
-          '- ⚠️ PARTIAL — criterion is partially met (explain what needs improvement)',
+          '### Instrucciones',
+          'Para cada criterio listado, determiná si la descripción del ticket lo satisface.',
+          'Respondé con:',
+          '- ✅ PASS — el criterio se cumple claramente',
+          '- ❌ FAIL — el criterio no se cumple (explicá qué falta)',
+          '- ⚠️ PARTIAL — el criterio se cumple parcialmente (explicá qué necesita mejorar)',
           '',
-          'Conclude with an overall **READY** or **NOT READY** verdict and a list of required changes.',
+          'Concluí con un veredicto general **READY** o **NOT READY** y una lista de cambios requeridos.',
         ].join('\n');
       }
 
@@ -313,30 +329,34 @@ export function createRefineSkill(storage: Storage): Skill {
         const rulesSection = resolveRulesForTool(storage, projectId, 'generate_user_stories', 'user_stories');
 
         return [
-          '## User Story Generation',
+          '### Tu Tarea',
           '',
-          '### Feature Description',
+          'Sos el generador de historias de usuario. Usando la descripción del feature abajo, producí historias siguiendo el formato y criterios indicados en **### Instrucciones**. No repitas el scaffold. Respondé en español.',
+          '',
+          '## Generación de Historias de Usuario',
+          '',
+          '### Descripción del Feature',
           featureDescription,
           '',
           rulesSection,
-          '### Instructions',
-          'Break down the feature description into individual user stories following the standard format:',
+          '### Instrucciones',
+          'Descompone la descripción del feature en historias de usuario individuales siguiendo el formato estándar:',
           '',
-          '**As a** [type of user], **I want** [goal], **so that** [benefit].',
+          '**Como** [tipo de usuario], **quiero** [objetivo], **para que** [beneficio].',
           '',
-          'For each user story, also provide:',
-          '- **Acceptance Criteria** (Given/When/Then format)',
-          '- **Story Points** (estimate: 1, 2, 3, 5, 8, 13)',
-          '- **Priority** (Must Have / Should Have / Could Have / Won\'t Have)',
-          '- **Dependencies** (other stories this depends on)',
+          'Para cada historia, además entregá:',
+          '- **Criterios de Aceptación** (formato Given/When/Then)',
+          '- **Story Points** (estimación: 1, 2, 3, 5, 8, 13)',
+          '- **Prioridad** (Must Have / Should Have / Could Have / Won\'t Have)',
+          '- **Dependencias** (otras historias de las que depende)',
           '',
-          'Aim for stories that are:',
-          '- **Independent** — can be developed and released independently',
-          '- **Negotiable** — details can be discussed',
-          '- **Valuable** — delivers value to the end user',
-          '- **Estimable** — team can estimate the effort',
-          '- **Small** — fits within a sprint',
-          '- **Testable** — has clear acceptance criteria',
+          'Apuntá a historias que sean:',
+          '- **Independientes** — se pueden desarrollar y liberar independientemente',
+          '- **Negociables** — los detalles pueden discutirse',
+          '- **Valiosas** — entregan valor al usuario final',
+          '- **Estimables** — el equipo puede estimar el esfuerzo',
+          '- **Pequeñas** — entran en un sprint',
+          '- **Testeables** — tienen criterios de aceptación claros',
         ].join('\n');
       }
 
@@ -347,35 +367,39 @@ export function createRefineSkill(storage: Storage): Skill {
         const rulesSection = resolveRulesForTool(storage, projectId, 'identify_dependencies', 'dependencies');
 
         return [
-          '## Dependency Analysis',
+          '### Tu Tarea',
           '',
-          '### Requirements',
+          'Sos el analizador de dependencias. Usando los requerimientos abajo, identificá y categorizá todas las dependencias siguiendo el formato de **### Instrucciones**. No repitas el scaffold. Respondé en español.',
+          '',
+          '## Análisis de Dependencias',
+          '',
+          '### Requerimientos',
           requirements,
           '',
           rulesSection,
-          '### Instructions',
-          'Analyze the requirements above and identify all dependencies. Categorize them as:',
+          '### Instrucciones',
+          'Analizá los requerimientos anteriores e identificá todas las dependencias. Categorizalas como:',
           '',
-          '#### Technical Dependencies',
-          '- External services or APIs required',
-          '- Libraries, frameworks, or tools needed',
-          '- Infrastructure or platform requirements',
-          '- Database schema changes',
+          '#### Dependencias Técnicas',
+          '- Servicios o APIs externos requeridos',
+          '- Librerías, frameworks o herramientas necesarias',
+          '- Requerimientos de infraestructura o plataforma',
+          '- Cambios de schema de base de datos',
           '',
-          '#### Functional Dependencies',
-          '- Features or capabilities that must exist before this can be implemented',
-          '- Data that must be available or migrated',
-          '- Business processes that must be in place',
+          '#### Dependencias Funcionales',
+          '- Features o capacidades que deben existir antes de implementar esto',
+          '- Datos que deben estar disponibles o migrados',
+          '- Procesos de negocio que deben estar en su lugar',
           '',
-          '#### Team Dependencies',
-          '- Other teams that need to deliver work first',
-          '- Subject matter experts or approvals required',
+          '#### Dependencias de Equipo',
+          '- Otros equipos que deben entregar trabajo primero',
+          '- Expertos de dominio o aprobaciones requeridas',
           '',
-          '#### Risk Assessment',
-          'For each dependency, assess:',
-          '- **Impact**: High / Medium / Low (what happens if this is not resolved)',
-          '- **Likelihood**: High / Medium / Low (chance the dependency causes a delay)',
-          '- **Mitigation**: Suggested action to address the dependency',
+          '#### Evaluación de Riesgo',
+          'Para cada dependencia, evaluá:',
+          '- **Impacto**: Alto / Medio / Bajo (qué pasa si no se resuelve)',
+          '- **Probabilidad**: Alta / Media / Baja (chance de que la dependencia cause demora)',
+          '- **Mitigación**: Acción sugerida para resolver la dependencia',
         ].join('\n');
       }
 
