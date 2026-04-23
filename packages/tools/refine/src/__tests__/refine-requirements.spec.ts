@@ -191,4 +191,44 @@ describe('refine_requirements tool', () => {
     expect(obj['thread_id']).toBe('thread-finalize-status');
     expect(obj['status']).toBe('completed');
   });
+
+  // i18n — one-shot includes "Tu Tarea" section and Spanish title
+  it('refine_requirements one-shot includes Tu Tarea and Spanish title', async () => {
+    const skill = createRefineSkill(storage);
+    const result = await skill.execute('refine_requirements', {
+      requirements: 'Req X.',
+    });
+    expect(result).toContain('### Tu Tarea');
+    expect(result).toContain('## Análisis de Refinamiento de Requerimientos');
+  });
+
+  // i18n — check_definition_of_ready prompt is in Spanish
+  it('check_definition_of_ready includes Tu Tarea and Spanish title', async () => {
+    const skill = createRefineSkill(storage);
+    const result = await skill.execute('check_definition_of_ready', {
+      ticket_description: 'Ticket: permitir login de usuarios',
+    });
+    expect(result).toContain('### Tu Tarea');
+    expect(result).toContain('## Verificación de Definition of Ready');
+  });
+
+  // i18n — generate_user_stories prompt is in Spanish
+  it('generate_user_stories includes Tu Tarea and Spanish title', async () => {
+    const skill = createRefineSkill(storage);
+    const result = await skill.execute('generate_user_stories', {
+      feature_description: 'Sistema de notificaciones push',
+    });
+    expect(result).toContain('### Tu Tarea');
+    expect(result).toContain('## Generación de Historias de Usuario');
+  });
+
+  // i18n — identify_dependencies prompt is in Spanish
+  it('identify_dependencies includes Tu Tarea and Spanish title', async () => {
+    const skill = createRefineSkill(storage);
+    const result = await skill.execute('identify_dependencies', {
+      requirements: 'El sistema debe autenticar usuarios vía OAuth.',
+    });
+    expect(result).toContain('### Tu Tarea');
+    expect(result).toContain('## Análisis de Dependencias');
+  });
 });

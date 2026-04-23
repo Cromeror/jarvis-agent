@@ -175,10 +175,10 @@ Archivo único: [packages/tools/refine/src/index.ts](../../../packages/tools/ref
 
 ### 3.3 Agregar tests mínimos de cobertura (opcional)
 
-- [ ] 3.3.1 Agregar test: one-shot contiene `### Tu Tarea` y `## Análisis de Refinamiento de Requerimientos`.
-- [ ] 3.3.2 Agregar test: `check_definition_of_ready` contiene `### Tu Tarea` y `## Verificación de Definition of Ready`.
-- [ ] 3.3.3 Agregar test: `generate_user_stories` contiene `### Tu Tarea` y `## Generación de Historias de Usuario`.
-- [ ] 3.3.4 Agregar test: `identify_dependencies` contiene `### Tu Tarea` y `## Análisis de Dependencias`.
+- [x] 3.3.1 Agregar test: one-shot contiene `### Tu Tarea` y `## Análisis de Refinamiento de Requerimientos`.
+- [x] 3.3.2 Agregar test: `check_definition_of_ready` contiene `### Tu Tarea` y `## Verificación de Definition of Ready`.
+- [x] 3.3.3 Agregar test: `generate_user_stories` contiene `### Tu Tarea` y `## Generación de Historias de Usuario`.
+- [x] 3.3.4 Agregar test: `identify_dependencies` contiene `### Tu Tarea` y `## Análisis de Dependencias`.
 
 ---
 
@@ -189,7 +189,7 @@ Archivo único: [packages/tools/refine/src/index.ts](../../../packages/tools/ref
 - [x] **4.3** `pnpm nx test @jarvis/tools-refine` — verde (24/24 tests).
 - [x] **4.4** `pnpm nx build @jarvis/cli` — verde.
 - [x] **4.5** `pnpm nx build @jarvis/mcp` — verde.
-- [ ] **4.6** Verificar que la regex del CLI sigue funcionando con el nuevo header (smoke test manual o inspección del header emitido).
+- [x] **4.6** Verificar que la regex del CLI sigue funcionando con el nuevo header — OK: emisor [`refine/src/index.ts:196-197`] produce `<!-- refine:meta\nthread_id: ${uuid}` que matchea la regex del CLI [`refine.ts:115`].
 
 **CHECKPOINT:** Todos los builds verdes, tests verdes.
 
@@ -197,6 +197,6 @@ Archivo único: [packages/tools/refine/src/index.ts](../../../packages/tools/ref
 
 ## Fase 5 — Cleanup y commit
 
-- [ ] **5.1** `jarvis mcp sync --dry-run` (si está disponible) — verificar que refleja descripciones actualizadas.
-- [ ] **5.2** Commit en rama actual con mensaje descriptivo.
-- [ ] **5.3** Actualizar `packages/docs/refine-flow.md` si es apropiado (sección de seguimiento).
+- [x] **5.1** `jarvis mcp sync --dry-run` — verde: `✓ Up to date: ~/.claude/CLAUDE.md` (ya sincronizado con las descripciones traducidas).
+- [ ] **5.2** Commit en rama actual con mensaje descriptivo. — pendiente (a cargo del user).
+- [x] **5.3** Actualizar `packages/docs/refine-flow.md` — traducidos los 3 matches (`Previous Output` → `Output Previo`, `Correction Instructions` → `Instrucciones de Corrección`, `Refinement Instructions` → `Instrucciones de Refinamiento`, `Input Requirements` → `Requerimientos de Entrada`).

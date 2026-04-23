@@ -28,7 +28,7 @@ flowchart TD
 
     NextIter[getNextIteration thread<br/>🔒 interno] --> Header[Construir header<br/>refine:meta thread_id / iteration<br/>🔒 interno]
 
-    Header --> Build["Ensamblar body:<br/>• Previous Output = fuente sobre la que iterar<br/>&nbsp;&nbsp;(aplicar correcciones acá)<br/>• Correction Instructions<br/>• rulesSection = guía de consistencia<br/>&nbsp;&nbsp;para el nuevo output<br/>• Refinement Instructions SMART+AC<br/>🔒 interno"]
+    Header --> Build["Ensamblar body:<br/>• Output Previo = fuente sobre la que iterar<br/>&nbsp;&nbsp;(aplicar correcciones acá)<br/>• Instrucciones de Corrección<br/>• rulesSection = guía de consistencia<br/>&nbsp;&nbsp;para el nuevo output<br/>• Instrucciones de Refinamiento SMART+AC<br/>🔒 interno"]
 
     Build --> Return([Retorna header + body<br/>📤 salida al LLM cliente vía MCP])
 
@@ -88,7 +88,7 @@ flowchart TD
 2. **Resolver base** ([index.ts:212-214](../tools/refine/src/index.ts#L212-L214)) — prioridad: `previous_output` explícito → `getLatest(thread)?.output` → `null`.
 3. **Próxima iteración** ([index.ts:216](../tools/refine/src/index.ts#L216)) — `getNextIteration(thread)` va al header meta.
 4. **Sin warning por finalización** — el hilo con status `'completed'` NO emite banner. El prompt se retorna normalmente; si el agente persiste una nueva iteración, el hilo se reabre automáticamente.
-5. **Ensamblado del prompt** ([index.ts:233-267](../tools/refine/src/index.ts#L233-L267)) — secciones condicionales (`Previous Output`, `Correction Instructions`, `rulesSection`) + bloque fijo `Refinement Instructions` (SMART + ambigüedades + missing info + edge cases + AC). En path iterativo, sin `Input Requirements`.
+5. **Ensamblado del prompt** ([index.ts:233-267](../tools/refine/src/index.ts#L233-L267)) — secciones condicionales (`Output Previo`, `Instrucciones de Corrección`, `rulesSection`) + bloque fijo `Instrucciones de Refinamiento` (SMART + ambigüedades + información faltante + casos límite + criterios de aceptación). En path iterativo, sin `Requerimientos de Entrada`.
 6. **Aprobación del cliente** — el cliente muestra, el LLM ejecuta, el user revisa. La tool no participa de esta decisión.
 7. **Persistencia** ([index.ts:384-405](../tools/refine/src/index.ts#L384-L405)) — `refine_save_iteration`; si el hilo está `'completed'`, reabre automáticamente (todas las filas → `'in_progress'`) e inserta la nueva iteración `'in_progress'` en una transacción.
 8. **Cerrar** ([index.ts:419-423](../tools/refine/src/index.ts#L419-L423)) — `refine_finalize` marca todas las iteraciones como `'completed'`; idempotente.
@@ -110,7 +110,7 @@ SDD completo: [openspec/changes/refine-flow-refactor/](../../openspec/changes/re
 | Fase | Descripción | Estado |
 |------|-------------|--------|
 | 1 | Storage — tipos, repo, DDL, migración (wipe), tests | ✅ completada |
-| 2 | Skill refine — one-shot con UUID, iterativo sin `Input Requirements`, save sin throw, finalize sin literal, tests | ✅ completada |
+| 2 | Skill refine — one-shot con UUID, iterativo sin `Requerimientos de Entrada`, save sin throw, finalize sin literal, tests | ✅ completada |
 | 3 | CLI — colorización, `iterate` sin UUID local, mensaje de error removido | ✅ completada |
 | 4 | Docs y spec base — `mcp-instructions.md`, `refine-flow.md`, `specs/refine/spec.md`, sync MCP | ✅ completada |
 | 5 | Verify E2E (S1..S12 del spec) + regression tests | ✅ completada |
