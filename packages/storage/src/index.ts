@@ -5,6 +5,7 @@ import { createCognitiveRepo } from "./repositories/cognitive.js";
 import { createIntegrationsRepo } from "./repositories/integrations.js";
 import { createKnowledgeRepo } from "./repositories/knowledge.js";
 import { createOutputsRepo } from "./repositories/outputs.js";
+import { createProjectWorkflowsRepo } from "./repositories/project-workflows.js";
 import { createProjectsRepo } from "./repositories/projects.js";
 import { createRefinementsRepo } from "./repositories/refinements.js";
 import { createRulesRepo } from "./repositories/rules.js";
@@ -29,6 +30,7 @@ export type {
   ProjectKnowledge,
   ProjectRule,
   ProjectStack,
+  ProjectWorkflowRow,
   RefinementRow,
   SaveOutputInput,
   SaveRefinementInput,
@@ -54,6 +56,7 @@ export interface Storage {
   rules: ReturnType<typeof createRulesRepo>;
   integrations: ReturnType<typeof createIntegrationsRepo>;
   knowledge: ReturnType<typeof createKnowledgeRepo>;
+  projectWorkflows: ReturnType<typeof createProjectWorkflowsRepo>;
   sessions: ReturnType<typeof createSessionsRepo>;
   outputs: ReturnType<typeof createOutputsRepo>;
   toolExecutions: ReturnType<typeof createToolExecutionsRepo>;
@@ -81,6 +84,7 @@ export function createStorage(dbPath: string): Storage {
     rules: createRulesRepo(db),
     integrations: createIntegrationsRepo(db),
     knowledge: createKnowledgeRepo(db),
+    projectWorkflows: createProjectWorkflowsRepo(db),
     sessions: createSessionsRepo(db),
     outputs: createOutputsRepo(db),
     toolExecutions: createToolExecutionsRepo(db),

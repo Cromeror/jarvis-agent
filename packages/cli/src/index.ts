@@ -22,6 +22,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { n8nExport } from './commands/n8n.js';
 import { mcpInstall, mcpUpdate, mcpUninstall, mcpStatus, mcpSync } from './commands/mcp.js';
 import { refineSave, refineIterate, refineList, refineShow, refineFinalize } from './commands/refine.js';
+import { projectWorkflowAdd, projectWorkflowList, projectWorkflowRemove } from './commands/project-workflow.js';
 
 const program = new Command();
 
@@ -178,6 +179,37 @@ stack.command('remove <stack-id>').description('Remove a stack entry by ID').act
   const { storage } = bootstrap(config);
   await stackRemove(storage, stackId);
 });
+
+// Project > Workflow subcommands
+const workflow = proj.command('workflow').description('Manage project n8n workflow registry');
+workflow.command('add <name>')
+  .description('Register a workflow in the project registry')
+  .requiredOption('--n8n-id <id>', 'n8n workflow ID')
+  .option('--description <desc>', 'Short description of what the workflow does')
+  .option('--local-path <path>', 'Relative path to the workflow JSON in the repo')
+  .option('-p, --project <project_id>', 'Project ID (overrides env var and .jarvis/project.json)')
+  .action(async (name: string, opts: { n8nId: string; description?: string; localPath?: string; project?: string }) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    await projectWorkflowAdd(storage, name, opts);
+  });
+workflow.command('list')
+  .description('List registered workflows for a project (or all n8n workflows with --global)')
+  .option('-p, --project <project_id>', 'Project ID (overrides env var and .jarvis/project.json)')
+  .option('--global', 'List all workflows from the n8n instance instead of the project registry')
+  .action(async (opts: { project?: string; global?: boolean }) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    await projectWorkflowList(storage, opts);
+  });
+workflow.command('remove <name>')
+  .description('Unregister a workflow from the project registry')
+  .option('-p, --project <project_id>', 'Project ID (overrides env var and .jarvis/project.json)')
+  .action(async (name: string, opts: { project?: string }) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    await projectWorkflowRemove(storage, name, opts);
+  });
 
 // Tool commands — invoke tools directly without the AI agent loop
 const tool = program.command('tool').description('Invoke JARVIS tools directly');

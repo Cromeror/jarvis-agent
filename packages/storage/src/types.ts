@@ -152,6 +152,17 @@ export interface AIConfig {
   updated_at: string;
 }
 
+export interface ProjectWorkflowRow {
+  id: number;
+  project_id: string;
+  name: string;
+  description: string | null;
+  n8n_workflow_id: string;
+  local_path: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RefinementRow {
   id: number;
   thread_id: string;

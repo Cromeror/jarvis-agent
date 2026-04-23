@@ -187,3 +187,50 @@ jarvis refine finalize <thread_id>
 jarvis mcp sync
 # Luego reiniciar la sesión de Claude Code
 ```
+
+---
+
+## Workflow Registry por Proyecto
+
+Jarvis permite que cada proyecto registre sus propios workflows de n8n como tools descubribles. El workflow vive en tres lugares:
+
+1. **JSON en el repo del proyecto**: `.jarvis/workflows/<name>.json` — la fuente de verdad.
+2. **n8n**: el workflow activo, accesible vía API.
+3. **Registry de Jarvis**: tabla `project_workflows` que relaciona `(project_id, name) → n8n_workflow_id`.
+
+### Flujo típico
+
+```
+1. El LLM llama `project_register_workflow({ project_id })` sin `n8n_workflow_id`.
+   → Jarvis devuelve un prompt guía en español con las rules del registry.
+2. El LLM crea el JSON en `.jarvis/workflows/<name>.json` del repo.
+3. El LLM sube el JSON a n8n con POST /api/v1/workflows y captura el `id`.
+4. El LLM re-llama `project_register_workflow` con todos los datos:
+   project_id, name, description, n8n_workflow_id, local_path.
+   → Jarvis valida el workflow en n8n y lo persiste.
+5. En sesiones posteriores, el LLM descubre los workflows con
+   `project_list_workflows(project_id)` y los ejecuta con `n8n_trigger_workflow`.
+```
+
+### Tools
+
+- **`project_register_workflow`** — Modo dual. Sin `n8n_workflow_id` devuelve prompt guía; con él persiste en el registry.
+- **`project_list_workflows`** — Lista los workflows registrados para el proyecto, con rules de ejecución.
+- **`project_unregister_workflow`** — Elimina del registry. **NO borra en n8n.**
+
+### Comandos CLI equivalentes
+
+- `jarvis project workflow add <name> --n8n-id <id> [--description <desc>] [--local-path <path>] [--project <project_id>]`
+- `jarvis project workflow list [--project <project_id>] [--global]`
+- `jarvis project workflow remove <name> [--project <project_id>]`
+
+### Seed idempotente de rules
+
+Al correr `jarvis mcp sync --project`, se insertan (idempotentemente) 16 rules iniciales en las categorías `workflow_registry.*`:
+
+- `workflow_registry.when_to_register` — 4 rules (WR-W1..W4).
+- `workflow_registry.how_to_create` — 6 rules (WR-H1..H6).
+- `workflow_registry.what_to_persist` — 4 rules (WR-P1..P4).
+- `workflow_registry.after_registration` — 2 rules (WR-A1..A2).
+
+Estas rules guían al LLM sobre cuándo, cómo y qué datos persistir. Si el usuario edita las rules de un proyecto (borrando o agregando), los cambios persisten hasta que explícitamente se borren y se re-sincronice.

@@ -185,6 +185,7 @@ export interface BlockSource {
     id: string;
     name: string;
     integrations: Array<{ service: string }>;
+    workflows?: Array<{ name: string; description: string | null }>;
   };
 }
 
@@ -214,6 +215,16 @@ function renderBlock(src: BlockSource): string {
         lines.push('');
         lines.push('### Active integrations');
         lines.push('_(none configured — run `jarvis integration set ...`)_');
+      }
+      // Registered n8n workflows section (only if non-empty)
+      if (src.projectContext.workflows && src.projectContext.workflows.length > 0) {
+        lines.push('');
+        lines.push('## Workflows registrados (n8n)');
+        lines.push('');
+        for (const wf of src.projectContext.workflows) {
+          const desc = wf.description ? ` — ${wf.description}` : '';
+          lines.push(`- \`${wf.name}\`${desc}`);
+        }
       }
     } else {
       lines.push('_No Jarvis project pinned for this directory. Run `jarvis mcp sync --project --project-id <id>`._');
@@ -365,7 +376,13 @@ export function mcpSync(
         process.exit(1);
       }
       const integrations = storage.integrations.list(opts.projectId).map((i) => ({ service: i.service }));
-      projectContext = { id: project.id, name: project.name, integrations };
+      // Seed workflow registry rules (idempotent — safe to call every sync)
+      storage.rules.seedWorkflowRegistryRules(opts.projectId);
+      // Load registered workflows for this project
+      const workflows = storage.projectWorkflows
+        .listByProject(opts.projectId)
+        .map((wf) => ({ name: wf.name, description: wf.description }));
+      projectContext = { id: project.id, name: project.name, integrations, workflows };
     }
     src = { scope, projectContext };
   }
