@@ -1,0 +1,21 @@
+# Tasks
+
+- [x] 1. Agregar `@jarvis/toon` a `packages/tools/n8n/package.json` (`dependencies`) y a `tsconfig.json` (`references`)
+- [x] 2. `jira_list_my_tickets` en `packages/tools/jira/src/index.ts`:
+  - cambiar cmd a `acli jira workitem search --jql "..." --json`
+  - `JSON.parse(runAcli(...))` y `return toTOON(parsed)`
+  - actualizar `description` MCP para mencionar TOON
+- [x] 3. `n8n_list_workflows` en `packages/tools/n8n/src/index.ts`:
+  - mantener proyección a `{id,name,active,updatedAt}`
+  - emitir con `toTOON(projected)` en vez de Markdown
+  - conservar early return textual para lista vacía
+  - actualizar `description` MCP
+- [x] 4. `n8n_get_execution_status`:
+  - proyectar `{id,status,workflowId,startedAt,stoppedAt,error?}`
+  - `return toTOON(payload)`
+  - actualizar `description` MCP
+- [x] 5. `project_list_workflows`: `JSON.stringify(...)` → `toTOON(...)` + `description` MCP
+- [x] 6. `project_register_workflow` (modo persistencia): `JSON.stringify(...)` → `toTOON(...)` + `description` MCP
+- [x] 7. `project_unregister_workflow`: `JSON.stringify(...)` → `toTOON(...)` + `description` MCP
+- [x] 8. `pnpm install` y `pnpm nx run-many -t build` verde
+- [x] 9. `jarvis mcp sync` + `jarvis mcp update` para reregistrar en Claude Code

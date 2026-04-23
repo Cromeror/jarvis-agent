@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@jarvis/core": "workspace:*",
-    "@jarvis/storage": "workspace:*"
+    "@jarvis/storage": "workspace:*",
+    "@jarvis/toon": "workspace:*"
   }
 }

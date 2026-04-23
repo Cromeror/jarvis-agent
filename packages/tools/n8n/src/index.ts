@@ -1,11 +1,13 @@
 import type { Skill, ToolDefinition } from '@jarvis/core';
 import { resolveRulesForTool } from '@jarvis/core';
 import type { Storage } from '@jarvis/storage';
+import { toTOON } from '@jarvis/toon';
 
 const tools: ToolDefinition[] = [
   {
     name: 'n8n_list_workflows',
-    description: 'Lists all workflows from the configured n8n instance',
+    description:
+      'Lists all workflows from the configured n8n instance. Returns an array of workflows (id, name, active, updatedAt) serialized in TOON format (Token-Oriented Object Notation) for efficient LLM consumption.',
     input_schema: {
       type: 'object',
       properties: {
@@ -41,7 +43,8 @@ const tools: ToolDefinition[] = [
   },
   {
     name: 'n8n_get_execution_status',
-    description: 'Gets the status of a specific n8n workflow execution',
+    description:
+      'Gets the status of a specific n8n workflow execution. Returns the execution (id, status, workflowId, startedAt, stoppedAt, error?) serialized in TOON format (Token-Oriented Object Notation) for efficient LLM consumption.',
     input_schema: {
       type: 'object',
       properties: {
@@ -60,7 +63,7 @@ const tools: ToolDefinition[] = [
   {
     name: 'project_register_workflow',
     description:
-      'Registra un workflow de n8n como disponible para el proyecto. **Esta tool tiene dos modos.** Modo **guía** (sin `n8n_workflow_id`): devuelve un prompt en español con instrucciones para crear el JSON del workflow, subirlo a n8n y volver a llamar esta tool con los datos. Modo **persistencia** (con `n8n_workflow_id`): valida que el workflow exista en n8n, inserta o actualiza la fila en el registry de Jarvis, y retorna los siguientes pasos para ejecutarlo. Upsert por `(project_id, name)`.',
+      'Registra un workflow de n8n como disponible para el proyecto. **Esta tool tiene dos modos.** Modo **guía** (sin `n8n_workflow_id`): devuelve un prompt en español con instrucciones para crear el JSON del workflow, subirlo a n8n y volver a llamar esta tool con los datos. Modo **persistencia** (con `n8n_workflow_id`): valida que el workflow exista en n8n, inserta o actualiza la fila en el registry de Jarvis, y retorna los siguientes pasos para ejecutarlo. Upsert por `(project_id, name)`. En modo persistencia la respuesta viene serializada en formato TOON (Token-Oriented Object Notation).',
     input_schema: {
       type: 'object',
       properties: {
@@ -95,7 +98,7 @@ const tools: ToolDefinition[] = [
   {
     name: 'project_list_workflows',
     description:
-      'Lista los workflows de n8n registrados para el proyecto. Devuelve las filas del registry (nombre, descripción, `n8n_workflow_id`, `local_path`) más las reglas de uso para invocarlos.',
+      'Lista los workflows de n8n registrados para el proyecto. Devuelve las filas del registry (nombre, descripción, `n8n_workflow_id`, `local_path`) más las reglas de uso para invocarlos, serializado en formato TOON (Token-Oriented Object Notation).',
     input_schema: {
       type: 'object',
       properties: {
@@ -110,7 +113,7 @@ const tools: ToolDefinition[] = [
   {
     name: 'project_unregister_workflow',
     description:
-      'Elimina un workflow del registry de Jarvis para el proyecto. **NO borra el workflow en n8n** — solo lo quita de la lista de workflows disponibles para este proyecto. El workflow sigue activo en n8n y puede re-registrarse si hace falta.',
+      'Elimina un workflow del registry de Jarvis para el proyecto. **NO borra el workflow en n8n** — solo lo quita de la lista de workflows disponibles para este proyecto. El workflow sigue activo en n8n y puede re-registrarse si hace falta. Respuesta serializada en formato TOON (Token-Oriented Object Notation).',
     input_schema: {
       type: 'object',
       properties: {
@@ -221,12 +224,14 @@ export function createN8nSkill(storage: Storage): Skill {
             return 'No workflows found in this n8n instance.';
           }
 
-          const rows = data.data.map(
-            (wf) =>
-              `- [${wf.active ? 'ACTIVE' : 'INACTIVE'}] ${wf.name} (ID: ${wf.id}) — updated: ${wf.updatedAt}`,
-          );
+          const projected = data.data.map((wf) => ({
+            id: wf.id,
+            name: wf.name,
+            active: wf.active,
+            updatedAt: wf.updatedAt,
+          }));
 
-          return [`## n8n Workflows (${data.data.length} total)`, '', ...rows].join('\n');
+          return toTOON(projected);
         }
 
         case 'n8n_trigger_workflow': {
@@ -294,19 +299,16 @@ export function createN8nSkill(storage: Storage): Skill {
             data?: { resultData?: { error?: { message: string } } };
           };
 
-          const lines = [
-            `## Execution Status: ${executionId}`,
-            `Status: ${data.status}`,
-            data.workflowId ? `Workflow ID: ${data.workflowId}` : '',
-            data.startedAt ? `Started: ${data.startedAt}` : '',
-            data.stoppedAt ? `Finished: ${data.stoppedAt}` : '',
-          ].filter(Boolean);
+          const payload = {
+            id: data.id,
+            status: data.status,
+            workflowId: data.workflowId,
+            startedAt: data.startedAt,
+            stoppedAt: data.stoppedAt,
+            error: data.data?.resultData?.error?.message,
+          };
 
-          if (data.data?.resultData?.error) {
-            lines.push('', `Error: ${data.data.resultData.error.message}`);
-          }
-
-          return lines.join('\n');
+          return toTOON(payload);
         }
 
         default:
@@ -451,7 +453,7 @@ export function createN8nSkill(storage: Storage): Skill {
           'workflow_registry.after_registration',
         );
 
-        return JSON.stringify({ row, next_steps: rulesAfter });
+        return toTOON({ row, next_steps: rulesAfter });
       }
 
       case 'project_list_workflows': {
@@ -464,7 +466,7 @@ export function createN8nSkill(storage: Storage): Skill {
           'workflow_registry.after_registration',
         );
 
-        return JSON.stringify({ workflows: rows, next_steps: rulesAfter });
+        return toTOON({ workflows: rows, next_steps: rulesAfter });
       }
 
       case 'project_unregister_workflow': {
@@ -478,7 +480,7 @@ export function createN8nSkill(storage: Storage): Skill {
           return `Error: El workflow '${name}' no estaba registrado en el proyecto ${project_id}.`;
         }
 
-        return JSON.stringify({
+        return toTOON({
           removed: true,
           name,
           note: 'El workflow sigue activo en n8n. Para borrarlo ahí, usá la UI de n8n directamente.',
