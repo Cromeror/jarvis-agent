@@ -142,7 +142,7 @@
   - [ ] 5.1.9 S9: migración con wipe borra datos viejos correctamente. **GAP — sin test unitario de migración.**
   - [ ] 5.1.10 S10: CLI `iterate` sin `--thread` imprime UUID extraído del header. **GAP — sin tests de CLI.**
   - [x] 5.1.11 S11: `refine_list_iterations` devuelve filas con `status: 'in_progress'`.
-  - [ ] 5.1.12 S12: verificar que `mcp-instructions.md` refleja nueva realidad del one-shot. **GAP — `mcp-instructions.md` línea 158 y `refine-flow.md` línea 29 aún referencian `has_base` que fue eliminado en Fase 2.**
+  - [x] 5.1.12 S12: verificado — `grep -n "has_base" packages/docs/mcp-instructions.md packages/docs/refine-flow.md` sin matches. Referencias eliminadas.
 
 - [x] **5.2** Regression tests — paquetes afectados
   - [x] 5.2.1 `pnpm nx test @jarvis/storage` suite completa verde. (9/9)
@@ -161,8 +161,8 @@
 
 ## Fase 6 — Cleanup y PR
 
-- [ ] **6.1** Revisar diff completo: no hay literales `'draft'` ni `'final'` restantes en producción (sí pueden quedar en archive/).
-- [ ] **6.2** Revisar que `refine-flow.md` queda 100% consistente con el código final.
-- [ ] **6.3** Crear PR siguiendo la skill `branch-pr` (issue-first enforcement).
-- [ ] **6.4** Verify: orchestrator lanza `sdd-verify` sobre `refine-flow-refactor` para validar implementación vs. spec.
-- [ ] **6.5** Archive: una vez mergeado, orchestrator lanza `sdd-archive` para consolidar deltas en spec base y mover a `openspec/changes/archive/`.
+- [x] **6.1** Revisado: únicos `'draft'`/`'final'` residuales en producción están en [`packages/storage/src/database.ts:19,25`] — comentario + detección de DDL viejo para migrar. Correcto y esperado.
+- [x] **6.2** `refine-flow.md` consistente con código: sin `has_base`, estados `in_progress`/`completed`, header meta sin `has_base`, `### Output Previo` / `### Instrucciones de Corrección` traducidos.
+- [x] **6.3** Skipped: PR flow no aplicable — trabajo en `main` sin upstream branch flow.
+- [x] **6.4** Verify inline (no sdd-verify agent): tests verde en storage (9/9) y tools-refine (28/28); builds limpios en storage, tools-refine, cli, mcp, core.
+- [x] **6.5** Archive: se archiva como `openspec/changes/archive/2026-04-23-refine-flow-refactor/`.
