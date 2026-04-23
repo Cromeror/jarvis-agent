@@ -49,7 +49,7 @@ function formatEntry(key: string, val: unknown, indent: number): string {
       return `${pad}${key}[${val.length}]: ${items}`;
     }
 
-    // Array of objects — check if uniform shape
+    // Array of objects — check if uniform shape with scalar-only cells
     if (val.every((v) => v !== null && typeof v === 'object' && !Array.isArray(v))) {
       const firstKeys = Object.keys(val[0] as object);
       const uniform = val.every((v) => {
@@ -57,7 +57,22 @@ function formatEntry(key: string, val: unknown, indent: number): string {
         return keys.length === firstKeys.length && keys.every((k) => firstKeys.includes(k));
       });
 
-      if (uniform && firstKeys.length > 0) {
+      const allScalarCells =
+        uniform &&
+        val.every((v) =>
+          firstKeys.every((k) => {
+            const cell = (v as Record<string, unknown>)[k];
+            return (
+              cell === null ||
+              cell === undefined ||
+              typeof cell === 'string' ||
+              typeof cell === 'number' ||
+              typeof cell === 'boolean'
+            );
+          }),
+        );
+
+      if (allScalarCells && firstKeys.length > 0) {
         const header = `${pad}${key}[${val.length}]{${firstKeys.join(',')}}:`;
         const rows = val.map((obj) => {
           const rowPad = '  '.repeat(indent + 1);
