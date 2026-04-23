@@ -1,38 +1,13 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
 import type { Skill, ToolDefinition } from '@jarvis/core';
-import { resolveRulesForTool, verifyN8n, ensureWorkflow } from '@jarvis/core';
+import { toTOON } from '@jarvis/toon';
 import type { Storage } from '@jarvis/storage';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function loadWorkflowJson(name: string): {
-  name: string;
-  nodes: unknown[];
-  connections: unknown;
-  settings?: unknown;
-} {
-  // dist/ lives one level below src/ in the built package, so ../workflows works for both
-  const candidates = [
-    resolve(__dirname, '..', 'workflows', `${name}.json`),
-    resolve(__dirname, 'workflows', `${name}.json`),
-  ];
-  for (const path of candidates) {
-    try {
-      return JSON.parse(readFileSync(path, 'utf-8'));
-    } catch {
-      // try next
-    }
-  }
-  throw new Error(`Workflow JSON not found: ${name}.json`);
-}
 
 const tools: ToolDefinition[] = [
   {
     name: 'jira_get_ticket',
-    description: 'Gets a Jira ticket via ACLI command',
+    description:
+      'Gets a Jira ticket via ACLI. Returns the ticket serialized in TOON format (Token-Oriented Object Notation) for efficient LLM consumption. TOON is a compact, indentation-based format: scalars as `key: value`, primitive arrays as `key[N]: v1,v2`, uniform object arrays as `key[N]{f1,f2}:` followed by rows.',
     input_schema: {
       type: 'object',
       properties: {
@@ -49,26 +24,9 @@ const tools: ToolDefinition[] = [
     },
   },
   {
-    name: 'jira_analyze_ticket',
-    description: 'Analyzes a Jira ticket against project rules. Uses n8n to execute ACLI and returns TOON-formatted data for interpretation.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        ticket_id: {
-          type: 'string',
-          description: 'The Jira ticket ID to analyze',
-        },
-        project_id: {
-          type: 'string',
-          description: 'Project ID (required to load Jira integration and rules)',
-        },
-      },
-      required: ['ticket_id', 'project_id'],
-    },
-  },
-  {
     name: 'jira_list_my_tickets',
-    description: 'Lists Jira tickets assigned to the current user',
+    description:
+      'Lists Jira tickets assigned to the current user. Returns an array of tickets serialized in TOON format (Token-Oriented Object Notation) for efficient LLM consumption.',
     input_schema: {
       type: 'object',
       properties: {
@@ -144,109 +102,18 @@ function getJiraConfig(storage: Storage, projectId?: string): JiraServiceConfig 
   return storage.integrations.getConfig<JiraServiceConfig>(projectId, 'jira') ?? null;
 }
 
-function ensureAcliSession(config: JiraServiceConfig | null): string[] {
-  if (!config) return [];
-  return [`acli jira auth switch --site ${config.site} --email ${config.email}`];
+function ensureAcliSession(config: JiraServiceConfig | null): void {
+  if (!config) return;
+  execSync(`acli jira auth switch --site ${config.site} --email ${config.email}`, {
+    encoding: 'utf-8',
+    timeout: 30000,
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
 }
 
 function runAcli(config: JiraServiceConfig | null, cmd: string): string {
-  const preamble = ensureAcliSession(config);
-  const fullCmd = [...preamble, cmd].join(' && ');
-  return execSync(fullCmd, { encoding: 'utf-8', timeout: 30000 });
-}
-
-async function analyzeTicketViaN8n(
-  storage: Storage,
-  projectId: string,
-  ticketId: string,
-): Promise<string> {
-  const availability = await verifyN8n(storage, projectId);
-  if (!availability.available) {
-    return availability.message;
-  }
-
-  const jiraConfig = getJiraConfig(storage, projectId);
-  if (!jiraConfig) {
-    return [
-      '⚠ Jira no esta configurado para este proyecto.',
-      '',
-      'Configuralo con:',
-      `  jarvis integration set ${projectId} jira --site <site> --email <email>`,
-    ].join('\n');
-  }
-
-  // Ensure the n8n workflow exists (lazy single-shot init)
-  const n8nConfig = storage.integrations.getConfig<{ url: string; api_key: string }>(projectId, 'n8n');
-  const ensureResult = await ensureWorkflow({
-    n8nUrl: availability.url,
-    apiKey: n8nConfig?.api_key || null,
-    workflowName: 'jira-analyze-ticket',
-    workflowJson: loadWorkflowJson('jira-analyze-ticket'),
-  });
-
-  if (ensureResult.status === 'error') {
-    return [
-      '⚠ No pude asegurar que el workflow "jira-analyze-ticket" este disponible.',
-      '',
-      ensureResult.message,
-    ].join('\n');
-  }
-
-  if (ensureResult.status === 'created') {
-    console.error(`⏳ Workflow "jira-analyze-ticket" no existia en n8n, creado y activado (id: ${ensureResult.id})`);
-  } else if (ensureResult.status === 'activated') {
-    console.error(`⏳ Workflow "jira-analyze-ticket" existia pero estaba inactivo, activado (id: ${ensureResult.id})`);
-  }
-
-  const webhookUrl = `${availability.url}/webhook/jira-analyze-ticket`;
-
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ticketId,
-        site: jiraConfig.site,
-        email: jiraConfig.email,
-      }),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      return [
-        `⚠ Error disparando workflow n8n (${response.status})`,
-        '',
-        body,
-        '',
-        `Verifica que el workflow "jira-analyze-ticket" este activo en ${availability.url}`,
-      ].join('\n');
-    }
-
-    const ticketToon = await response.text();
-    const rulesSection = resolveRulesForTool(storage, projectId, 'jira_analyze_ticket', 'jira');
-
-    return [
-      `## Jira Ticket Analysis: ${ticketId}`,
-      '',
-      '### Ticket Data (TOON format)',
-      '```',
-      ticketToon,
-      '```',
-      '',
-      rulesSection,
-      '### Instructions',
-      'Evalua el ticket contra las reglas del proyecto y la Definition of Ready.',
-      'Para cada criterio responde:',
-      '- ✅ PASS',
-      '- ❌ FAIL (con explicacion)',
-      '- ⚠️ PARTIAL (con explicacion)',
-      '',
-      'Concluye con un veredicto **READY** o **NOT READY** y lista las mejoras necesarias.',
-    ].join('\n');
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return `Error ejecutando workflow n8n: ${msg}`;
-  }
+  ensureAcliSession(config);
+  return execSync(cmd, { encoding: 'utf-8', timeout: 30000 });
 }
 
 export function createJiraSkill(storage: Storage): Skill {
@@ -261,16 +128,9 @@ export function createJiraSkill(storage: Storage): Skill {
       switch (toolName) {
         case 'jira_get_ticket': {
           const ticketId = input['ticket_id'] as string;
-          const cmd = `acli jira workitem view ${ticketId}`;
-          return runAcli(jiraConfig, cmd);
-        }
-
-        case 'jira_analyze_ticket': {
-          const ticketId = input['ticket_id'] as string;
-          if (!projectId) {
-            return 'Error: project_id es requerido para jira_analyze_ticket';
-          }
-          return analyzeTicketViaN8n(storage, projectId, ticketId);
+          const raw = runAcli(jiraConfig, `acli jira workitem view ${ticketId} --json`);
+          const parsed = JSON.parse(raw);
+          return toTOON(parsed);
         }
 
         case 'jira_list_my_tickets': {
@@ -282,8 +142,10 @@ export function createJiraSkill(storage: Storage): Skill {
           if (status) jql += ` AND status = "${status}"`;
           jql += ' ORDER BY updated DESC';
 
-          const cmd = `acli jira workitem search --jql "${jql}"`;
-          return runAcli(jiraConfig, cmd);
+          const cmd = `acli jira workitem search --jql "${jql}" --json`;
+          const raw = runAcli(jiraConfig, cmd);
+          const parsed = JSON.parse(raw);
+          return toTOON(parsed);
         }
 
         case 'jira_add_comment': {
@@ -319,6 +181,7 @@ export function createJiraSkill(storage: Storage): Skill {
         '- ACLI is not installed (install from https://bobswift.atlassian.net/wiki/spaces/ACLI)',
         '- Jira integration is not configured (use: jarvis integration set <project> jira --site <site> --email <email>)',
         '- Invalid ticket ID or insufficient permissions',
+        '- ACLI returned non-JSON output for --json command (check ACLI version)',
         '',
         `Jira config: ${configInfo}`,
       ].join('\n');
@@ -327,7 +190,7 @@ export function createJiraSkill(storage: Storage): Skill {
 
   return {
     name: 'jira',
-    description: 'Interact with Jira via ACLI: get, analyze, list, comment, and transition tickets',
+    description: 'Interact with Jira via ACLI: get, list, comment, and transition tickets',
     tools,
     execute,
   };

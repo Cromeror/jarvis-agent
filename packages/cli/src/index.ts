@@ -224,7 +224,7 @@ tool.command('help <tool-name>').description('Show usage help for a specific too
   toolHelp(toolRegistry, toolName);
 });
 tool.command('run <tool-name>')
-  .description('Run a tool with JSON input. Example: jarvis tool run jira_analyze_ticket --input \'{"ticket_id":"LXM-473","project_id":"lx"}\'')
+  .description('Run a tool with JSON input. Example: jarvis tool run jira_get_ticket --input \'{"ticket_id":"LXM-473","project_id":"lx"}\'')
   .option('-i, --input <json>', 'Tool input as JSON string')
   .option('-p, --param <key=value...>', 'Input param (can be used multiple times, e.g. -p ticket_id=LXM-473 -p project_id=lx)')
   .allowUnknownOption()

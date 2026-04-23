@@ -9,7 +9,6 @@ const TOOL_OBJECTIVES: Record<string, string> = {
   'generate_user_stories': 'Break down feature descriptions into well-structured, INVEST-compliant user stories.',
   'identify_dependencies': 'Identify technical, functional, and team dependencies in requirements with risk assessment.',
   'jira_get_ticket': 'Retrieve ticket information from Jira.',
-  'jira_analyze_ticket': 'Analyze a Jira ticket for quality and completeness.',
   'jira_list_my_tickets': 'List assigned Jira tickets with optional filtering.',
   'jira_add_comment': 'Add a comment to a Jira ticket.',
   'jira_transition_ticket': 'Transition a Jira ticket to a new status.',

@@ -41,6 +41,5 @@ export { AnthropicProvider } from './providers/anthropic-provider.js';
 export { OllamaProvider } from './providers/ollama-provider.js';
 export { QwenProvider } from './providers/qwen-provider.js';
 
-export { toTOON } from './toon.js';
 export { getJarvisKnowledge } from './jarvis-knowledge.js';
 export type { JarvisKnowledgeOptions } from './jarvis-knowledge.js';

@@ -219,6 +219,9 @@ importers:
       '@jarvis/storage':
         specifier: workspace:*
         version: link:../../storage
+      '@jarvis/toon':
+        specifier: workspace:*
+        version: link:../../toon
 
   packages/tools/n8n:
     dependencies:
@@ -228,6 +231,9 @@ importers:
       '@jarvis/storage':
         specifier: workspace:*
         version: link:../../storage
+      '@jarvis/toon':
+        specifier: workspace:*
+        version: link:../../toon
 
   packages/tools/refine:
     dependencies:
@@ -237,6 +243,8 @@ importers:
       '@jarvis/storage':
         specifier: workspace:*
         version: link:../../storage
+
+  packages/toon: {}
 
 packages:
 

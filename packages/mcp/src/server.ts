@@ -104,9 +104,9 @@ export async function startServer(): Promise<void> {
 
   server.tool(
     'jarvis_run_tool',
-    'Invoke a JARVIS tool directly (bypasses the AI agent loop). Use this to execute a specific tool like jira_analyze_ticket with known inputs.',
+    'Invoke a JARVIS tool directly (bypasses the AI agent loop). Use this to execute a specific tool like jira_get_ticket with known inputs.',
     {
-      tool_name: z.string().describe('The tool to invoke (e.g. jira_analyze_ticket, jira_get_ticket)'),
+      tool_name: z.string().describe('The tool to invoke (e.g. jira_get_ticket, jira_list_my_tickets)'),
       input: z.record(z.unknown()).describe('The input object for the tool (e.g. { ticket_id: "LXM-473", project_id: "lx" })'),
     },
     async ({ tool_name, input }) => {
