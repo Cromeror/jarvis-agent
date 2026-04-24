@@ -28,18 +28,18 @@ Este documento contiene el prompt para indicarle a Cursor cómo adoptar este set
 
 ## Prompt para Cursor
 
-Copiá y pegá este bloque en el chat de Cursor del proyecto destino. Ajustá el path `~/work/Jarvis-agent/` si el repo está en otro lado.
+Copiá y pegá este bloque en el chat de Cursor del proyecto destino. Antes, definí la variable `<JARVIS_REPO>` — la ruta al clon local del repo `jarvis-agent` (absoluta o relativa al proyecto destino, ej: `../jarvis-agent` si ambos están en el mismo dir padre).
 
 ```
-Quiero que adoptes un set de reglas agentic de Cursor que viven en el repo de Jarvis-agent (asumilo en `~/work/Jarvis-agent/.cursor/rules/`). Instalalas separadas en dos grupos — globales (User Rules) para las genéricas, y locales (este repo) para las específicas.
+Quiero que adoptes un set de reglas agentic de Cursor que viven en el repo de Jarvis-agent. Reemplazá `<JARVIS_REPO>` por la ruta al clon local del repo (ej: `../jarvis-agent` si está a la par de este proyecto, o el path absoluto si no). Instalalas separadas en dos grupos — globales (User Rules) para las genéricas, y locales (este repo) para las específicas.
 
 ### Grupo 1 — instalar como USER RULES (globales, Settings → Rules → User Rules)
 
 Estas son genéricas y sirven en cualquier proyecto, no contaminan repos que no usan Jarvis. Leé el contenido de cada archivo y pegá el CUERPO (sin el frontmatter YAML `---`, porque User Rules no lo usan) como una regla global separada, conservando el nombre del archivo como título:
 
-- ~/work/Jarvis-agent/.cursor/rules/tier-0-core/jarvis-project-init.mdc
-- ~/work/Jarvis-agent/.cursor/rules/tier-2-transversal/jarvis-rules-and-stack.mdc
-- ~/work/Jarvis-agent/.cursor/rules/tier-2-transversal/jarvis-doctor-and-troubleshooting.mdc
+- <JARVIS_REPO>/.cursor/rules/tier-0-core/jarvis-project-init.mdc
+- <JARVIS_REPO>/.cursor/rules/tier-2-transversal/jarvis-rules-and-stack.mdc
+- <JARVIS_REPO>/.cursor/rules/tier-2-transversal/jarvis-doctor-and-troubleshooting.mdc
 
 ### Grupo 2 — instalar como REGLAS LOCALES del proyecto
 
@@ -51,14 +51,14 @@ Estas aplican solo donde el flujo tiene sentido. Copialas TAL CUAL (incluyendo e
    - `tier-0-core/`
    - `tier-1-expansion/`
 
-3. Copiá estos archivos respetando la estructura:
+3. Copiá estos archivos respetando la estructura (las rutas de origen son relativas a `<JARVIS_REPO>`, las de destino son relativas a la raíz de este proyecto):
 
-   ~/work/Jarvis-agent/.cursor/rules/tier-0-core/jarvis-refinement.mdc           → .cursor/rules/tier-0-core/
-   ~/work/Jarvis-agent/.cursor/rules/tier-0-core/jarvis-jira-refinement.mdc      → .cursor/rules/tier-0-core/
-   ~/work/Jarvis-agent/.cursor/rules/tier-0-core/jarvis-jira-setup.mdc           → .cursor/rules/tier-0-core/
-   ~/work/Jarvis-agent/.cursor/rules/tier-1-expansion/jarvis-code-tools.mdc      → .cursor/rules/tier-1-expansion/
-   ~/work/Jarvis-agent/.cursor/rules/tier-1-expansion/jarvis-n8n-setup.mdc       → .cursor/rules/tier-1-expansion/
-   ~/work/Jarvis-agent/.cursor/rules/tier-1-expansion/jarvis-n8n-workflows.mdc   → .cursor/rules/tier-1-expansion/
+   <JARVIS_REPO>/.cursor/rules/tier-0-core/jarvis-refinement.mdc           → ./.cursor/rules/tier-0-core/
+   <JARVIS_REPO>/.cursor/rules/tier-0-core/jarvis-jira-refinement.mdc      → ./.cursor/rules/tier-0-core/
+   <JARVIS_REPO>/.cursor/rules/tier-0-core/jarvis-jira-setup.mdc           → ./.cursor/rules/tier-0-core/
+   <JARVIS_REPO>/.cursor/rules/tier-1-expansion/jarvis-code-tools.mdc      → ./.cursor/rules/tier-1-expansion/
+   <JARVIS_REPO>/.cursor/rules/tier-1-expansion/jarvis-n8n-setup.mdc       → ./.cursor/rules/tier-1-expansion/
+   <JARVIS_REPO>/.cursor/rules/tier-1-expansion/jarvis-n8n-workflows.mdc   → ./.cursor/rules/tier-1-expansion/
 
 4. Si este proyecto NO usa n8n, podés saltear los tres archivos `jarvis-n8n-*` — no son útiles acá.
    Si este proyecto NO usa Jira, podés saltear `jarvis-jira-*`.
