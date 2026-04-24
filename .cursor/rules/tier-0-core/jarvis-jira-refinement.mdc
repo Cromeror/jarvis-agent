@@ -16,7 +16,7 @@ Cuando el user pida refinar / clarificar / analizar un ticket de Jira (ej: "refi
 ## Flujo estándar
 
 1. **Identificá el `project_id`** buscando en este orden (no preguntes al user hasta agotarlo):
-   a. `./CLAUDE.md` del repo actual — buscá el pin de Jarvis (`project_id: <id>`).
+   a. `.cursor/rules/jarvis-project.mdc` del repo actual — si tiene `alwaysApply: true`, el `project_id` está pinneado ahí.
    b. `jarvis_list_projects` (MCP) — si hay match único por nombre/contexto, usá ese.
    c. `jarvis project list` (CLI) — equivalente en terminal.
    d. Preguntale al user solo si los anteriores fallaron.

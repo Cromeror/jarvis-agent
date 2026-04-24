@@ -23,7 +23,7 @@ La integración n8n en Jarvis guarda `{url, api_key}` para que las tools `n8n_*`
 Preguntale estos valores:
 
 1. **`project_id` de Jarvis** — ID del proyecto donde va a vivir la integración. Buscá en este orden:
-   a. `./CLAUDE.md` del repo — buscá pin de Jarvis.
+   a. `.cursor/rules/jarvis-project.mdc` del repo — buscá el pin con `alwaysApply: true`.
    b. `jarvis_list_projects` (MCP) o `jarvis project list` (CLI).
    c. Preguntale al user si los anteriores fallan.
 

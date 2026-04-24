@@ -1,54 +1,67 @@
 ---
-description: Guiar al user para inicializar Jarvis en un proyecto — crear el proyecto en Jarvis, sincronizar el CLAUDE.md global y local, y dejarlo listo para usar tools MCP. Aplicar cuando el user pida "iniciar jarvis en este proyecto", "setup jarvis", "registrar proyecto en jarvis", "sync jarvis", "conectar proyecto con jarvis".
+description: Guiar a Cursor para inicializar Jarvis en un proyecto — crear el proyecto en Jarvis, registrar el MCP server en Cursor, y pinnear el project_id. Aplicar cuando el user pida "iniciar jarvis en este proyecto", "setup jarvis", "registrar proyecto en jarvis", "sync jarvis", "conectar proyecto con jarvis".
 alwaysApply: false
 ---
 
-# Inicializar Jarvis en un proyecto
+# Inicializar Jarvis en un proyecto (desde Cursor)
 
-Cuando el user pida inicializar Jarvis en un proyecto (variantes: "iniciar jarvis acá", "setup jarvis", "registrar este proyecto en jarvis", "conectar este repo con jarvis", "sync jarvis", "jarvis no me conoce este proyecto"), guialo por este flujo.
+Cuando el user pida inicializar Jarvis en un proyecto (variantes: "iniciar jarvis acá", "setup jarvis", "registrar este proyecto en jarvis", "conectar este repo con jarvis", "sync jarvis", "jarvis no me conoce este proyecto"), Cursor debe guiarlo por este flujo.
 
 ## Contexto
 
 Jarvis tiene **tres capas de setup** que suelen confundirse:
 
-1. **Global de la máquina** (una vez por máquina): Jarvis instalado, MCP server registrado en Claude Code, CLAUDE.md global con catálogo de tools.
+1. **Global de la máquina** (una vez por máquina): Jarvis instalado y MCP server registrado en Cursor vía `mcp.json`.
 2. **Proyecto registrado en Jarvis** (una vez por proyecto): fila en la DB de Jarvis con `id`, `name`, `sector`, `description`. Este `project_id` es la clave que usan todas las tools MCP.
-3. **CLAUDE.md local del proyecto** (una vez por proyecto): bloque de instrucciones sincronizado al `./CLAUDE.md` del repo, pinneando el `project_id` para que Claude Code / Cursor sepan qué proyecto usar sin preguntar.
+3. **Pin del `project_id` en el repo** (una vez por proyecto): regla `.cursor/rules/jarvis-project.mdc` con `alwaysApply: true` que fija el ID para que Cursor no tenga que preguntarlo.
 
-Las tools MCP de Jarvis (`mcp__jarvis__*`) funcionan desde que está el paso 1 + el proyecto creado en el paso 2. El paso 3 es para que el agente detecte automáticamente el `project_id` sin que el user lo repita.
+Las tools MCP de Jarvis (`mcp__jarvis__*`) funcionan desde que está el paso 1 + el proyecto creado en el paso 2. El paso 3 es para que Cursor detecte automáticamente el `project_id` sin que el user lo repita.
 
 ## Flujo paso a paso
 
 ### Paso 0 — Pre-chequeo de instalación global
 
-Antes de arrancar preguntale al user:
-1. ¿Tenés Jarvis instalado? Verificá con `jarvis --version` (o `jarvis doctor` para un diagnóstico completo, incluye detección de drift en CLAUDE.md).
-2. ¿Ya corriste `jarvis setup` alguna vez en esta máquina? (inicializa data dir, DB, seed). Si es instalación nueva, hay que correrlo primero:
+Antes de arrancar, Cursor debe preguntarle al user:
+
+1. ¿Tenés Jarvis instalado? Verificá con `jarvis --version` (o `jarvis doctor` para un diagnóstico completo).
+2. ¿Ya corriste `jarvis setup` alguna vez en esta máquina? (inicializa data dir, DB, seed). Si es instalación nueva, correr primero:
    ```bash
    jarvis setup
    ```
-3. ¿Jarvis está registrado como MCP server en Claude Code? Verificá con `jarvis mcp status`. Si no, una vez por máquina:
-   ```bash
-   jarvis mcp install
+3. ¿Jarvis está registrado como MCP server en Cursor? Verificalo en **Cursor → Settings → MCP** — tiene que aparecer `jarvis` con tools `mcp__jarvis__*` disponibles. Si no aparece, hay que agregarlo manualmente al `mcp.json`:
+
+   - **Global** (aplica a todos los proyectos): `~/.cursor/mcp.json`
+   - **Local al repo actual**: `./.cursor/mcp.json`
+
+   Config a agregar (buildeá antes con `pnpm -C packages/mcp build` en el repo de Jarvis-agent):
+   ```json
+   {
+     "mcpServers": {
+       "jarvis": {
+         "command": "node",
+         "args": ["<ruta-absoluta-al-clon>/packages/mcp/dist/server.js"]
+       }
+     }
+   }
    ```
-   (Flags útiles: `-s user|local|project` para el scope — default `user`. `--skip-build` si ya está buildeado.)
+   Reemplazá `<ruta-absoluta-al-clon>` por el path absoluto del repo de Jarvis-agent. Después, **reiniciá Cursor** para que recargue la config (no la recarga al vuelo).
 
-Si alguno falta, resolvélo antes de seguir.
+Si algún chequeo falla, resolvélo antes de seguir.
 
-### Paso 1 — Datos que necesito del user
+### Paso 1 — Datos que necesita Cursor del user
 
-Preguntale estos valores para crear el proyecto:
+Cursor debe preguntarle al user estos valores para crear el proyecto:
 
 1. **`project_id`** — identificador corto, kebab-case, estable. Va a ser la clave de todas las tools (`-p project_id=<id>`). Ejemplos reales: `lx`, `cash`, `pld-api`, `cm-front`. Sugerí algo basado en el nombre del repo si el user no tiene preferencia.
 2. **`name`** — nombre humano del proyecto (ej: "Cash", "PLD API").
 3. **`sector`** (opcional) — dominio/industria (ej: "fintech", "retail", "internal-tools"). Útil para que las reglas del proyecto tengan contexto.
 4. **`description`** (opcional) — una línea sobre qué hace el proyecto.
 
-**Antes de seguir**, corré `jarvis project list` para confirmar que el `project_id` elegido no exista ya. Si existe, preguntale al user si quiere reusarlo o elegir otro.
+**Antes de seguir**, Cursor debe correr `jarvis project list` para confirmar que el `project_id` elegido no exista ya. Si existe, preguntale al user si quiere reusarlo o elegir otro.
 
 ### Paso 2 — Crear el proyecto en Jarvis
 
-Armá el comando con los datos del user:
+Cursor debe armar el comando con los datos del user:
 
 ```bash
 jarvis project create <project_id> --name "<name>" --sector "<sector>" --description "<description>"
@@ -61,56 +74,48 @@ jarvis project create cash --name "Cash" --sector "fintech" --description "API d
 
 Ofrecé **dos opciones**:
 - **A) Que lo corra el user** — mostrale el comando exacto.
-- **B) Que lo corras vos** — ejecutalo vía terminal. **Confirmá los valores antes** — es escritura persistente en la DB de Jarvis.
+- **B) Que lo corra Cursor** — ejecutalo vía terminal. **Confirmá los valores antes** — es escritura persistente en la DB de Jarvis.
 
-Verificá con `jarvis project show <project_id>` que haya quedado bien.
+Después, verificá con `jarvis project show <project_id>` que haya quedado bien.
 
-### Paso 3 — Sincronizar CLAUDE.md global (una vez por máquina)
+### Paso 3 — Pinnear el `project_id` en el repo
 
-Este paso ya debería estar hecho si el user corrió `jarvis mcp install` en el paso 0, pero confirmalo. El sync global escribe el catálogo de tools Jarvis al CLAUDE.md de user scope (`~/.claude/CLAUDE.md`):
+Cursor tiene que crear una regla local en el repo del proyecto para que el `project_id` quede fijado:
 
-```bash
-jarvis mcp sync
+**Archivo a crear**: `.cursor/rules/jarvis-project.mdc` (en la raíz del repo actual).
+
+**Contenido**:
+```markdown
+---
+description: Pin del project_id de Jarvis para este repo
+alwaysApply: true
+---
+
+# Jarvis project_id
+
+Este repo corresponde al proyecto Jarvis: `<project_id>`
+
+Cuando invoques tools `mcp__jarvis__*` o `jarvis_run_tool`, usá siempre este `project_id` sin volver a preguntar.
 ```
 
-Flags útiles:
-- `--check` — exit code 2 si hay drift, útil para CI/pre-commit.
-- `--dry-run` — muestra qué haría sin escribir.
-- `--force` — sobreescribe aunque haya drift.
+Reemplazá `<project_id>` por el ID creado en el paso 2. Al estar con `alwaysApply: true`, Cursor va a ver el pin en toda conversación sobre este repo.
 
-Resultado esperado: al abrir cualquier proyecto, Cursor / Claude Code ven el catálogo de tools Jarvis y saben qué pueden invocar.
+### Paso 4 — Verificar todo
 
-### Paso 4 — Sincronizar CLAUDE.md local del proyecto
-
-Este es el paso clave para que el agente detecte el `project_id` automáticamente. **Debe correrse desde la raíz del repo del proyecto**:
+Cursor debe validar corriendo:
 
 ```bash
-cd /ruta/al/proyecto
-jarvis mcp sync --project --project-id <project_id>
+jarvis doctor                              # chequea instalación + integraciones
+jarvis project show <project_id>           # confirma que el proyecto existe en Jarvis
 ```
 
-Qué hace:
-- Escribe/actualiza un bloque Jarvis en `./CLAUDE.md` del repo.
-- Pinnea el `project_id` dentro del bloque para que el agente sepa qué proyecto usar sin preguntar al user.
-- Incluye la lista de integraciones activas del proyecto (Jira, n8n, GitHub) — se actualiza cada vez que se vuelve a correr.
+Para verificar el registro MCP en Cursor: abrí **Settings → MCP** y confirmá que `jarvis` aparece con tools listadas. Si editaste `mcp.json` recién, **reiniciá Cursor primero**.
 
-Si `./CLAUDE.md` ya existe con otro contenido del user, Jarvis respeta eso e inyecta solo su bloque entre marcadores.
-
-### Paso 5 — Verificar todo
-
-Corré estos tres comandos para validar el stack completo:
-
-```bash
-jarvis doctor                              # chequea instalación + drift CLAUDE.md
-jarvis project show <project_id>           # confirma que el proyecto existe
-jarvis mcp status                          # confirma que el MCP server está registrado
-```
-
-Si todo OK, el user ya puede usar las tools desde Cursor / Claude Code.
+Si todo OK, el user ya puede usar las tools desde Cursor.
 
 ## Pasos siguientes típicos (ofrecelos al terminar)
 
-Ofrecé al user estos opcionales según lo que vaya a hacer con el proyecto:
+Cursor debe ofrecer al user estos opcionales según lo que vaya a hacer con el proyecto:
 
 - **Agregar stack** (ayuda a que las tools de código generen en el lenguaje/framework correcto):
   ```bash
@@ -122,18 +127,18 @@ Ofrecé al user estos opcionales según lo que vaya a hacer con el proyecto:
   ```
 - **Conectar integraciones** según necesidad:
   - Jira → ver regla `jarvis-jira-setup` (o `jarvis integration set <project_id> jira --site ... --email ...`)
-  - n8n → `jarvis integration set <project_id> n8n --url ... --api-key ...`
+  - n8n → ver regla `jarvis-n8n-setup` (o `jarvis integration set <project_id> n8n --url ... --api-key ...`)
   - GitHub → `jarvis integration set <project_id> github --repo ... --token ...`
-- **Commitear el `CLAUDE.md` actualizado** al repo para que el equipo lo comparta:
+- **Commitear la regla de pin** al repo para que el equipo la comparta:
   ```bash
-  git add CLAUDE.md && git commit -m "chore: sync Jarvis context block"
+  git add .cursor/rules/jarvis-project.mdc && git commit -m "chore: pin Jarvis project_id"
   ```
 
 ## Dónde encontrar el `project_id` después del setup
 
 Una vez creado el proyecto, cuando alguien (user u otro agente) pregunte "¿cuál es el `project_id` de este repo?", buscá en este orden:
 
-1. **`./CLAUDE.md` del repo** — si se corrió el paso 4 (`jarvis mcp sync --project --project-id <id>`), el ID queda pinneado en el bloque de Jarvis. Es la fuente de verdad local.
+1. **`.cursor/rules/jarvis-project.mdc`** del repo — si se corrió el paso 3, el ID está pinneado acá con `alwaysApply: true`. Es la fuente de verdad.
 2. **`jarvis_list_projects`** (MCP) o **`jarvis project list`** (CLI) — lista todos los proyectos registrados en la DB de Jarvis.
 3. **`jarvis project show <candidato>`** — si sospechás el ID, confirmalo acá.
 
@@ -142,8 +147,7 @@ Si no aparece en ninguno, el proyecto no está registrado — volvé al paso 2 d
 ## Reglas duras
 
 1. **Nunca inventes un `project_id`** que ya exista — siempre `jarvis project list` primero. Si el user insiste en reusar uno existente, confirmá que entiende que va a compartir reglas/stack/integraciones con el proyecto previo.
-2. **`jarvis mcp sync --project` debe correrse desde la raíz del repo** — si se corre desde otro dir, escribe en el CLAUDE.md equivocado. Verificá con `pwd` antes.
-3. **No confundas los dos CLAUDE.md**: `~/.claude/CLAUDE.md` (global, catálogo de tools) vs `./CLAUDE.md` (proyecto, pin de `project_id`). Son roles distintos.
-4. Si `jarvis doctor` reporta drift, corré `jarvis mcp sync` (global) y/o `jarvis mcp sync --project --project-id <id>` (local) para resolverlo — no edites los CLAUDE.md a mano.
-5. Si el user corre `jarvis mcp sync --project` sin `--project-id`, Jarvis intenta auto-detectar desde `./CLAUDE.md` si ya hay un pin previo. Primera vez → exigí el `--project-id`.
-6. Si vas a ejecutar `jarvis project create` vos mismo, **confirmá los valores antes** — es acción persistente y el `project_id` no se puede renombrar fácilmente después.
+2. **El pin del `project_id`** vive en `.cursor/rules/jarvis-project.mdc` con `alwaysApply: true`. No uses otros archivos ni nombres — la convención es importante para que otras reglas Jarvis sepan dónde buscar.
+3. **Después de editar `mcp.json`, siempre reiniciar Cursor** — no recarga la config MCP al vuelo.
+4. **Usá rutas absolutas en `mcp.json`** — ni `~` ni relativas. Cursor puede fallar silenciosamente si no resuelve.
+5. Si vas a ejecutar `jarvis project create` desde la terminal, **confirmá los valores con el user antes** — es acción persistente y el `project_id` no se puede renombrar fácilmente después.

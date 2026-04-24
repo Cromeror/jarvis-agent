@@ -26,7 +26,7 @@ Antes de arrancar, preguntale al user:
 Preguntale estos 4 valores (uno por uno o todos juntos, como le quede mejor):
 
 1. **`project_id` de Jarvis** — el ID del proyecto en Jarvis donde va a vivir la integración (ej: `lx`, `cash`, `pld-api`). Buscalo en este orden antes de preguntar:
-   a. `./CLAUDE.md` del repo actual — buscá el pin de Jarvis (`project_id: <id>`).
+   a. `.cursor/rules/jarvis-project.mdc` del repo actual — si tiene `alwaysApply: true`, el `project_id` está pinneado ahí.
    b. `jarvis_list_projects` (MCP) o `jarvis project list` (CLI) — lista todos.
    c. Preguntale al user solo si los anteriores fallaron. Si el proyecto no existe en Jarvis, sugerile crearlo primero con la regla `jarvis-project-init`.
 2. **Site de Atlassian** — dominio sin `https://` (ej: `miorg.atlassian.net`).
@@ -75,7 +75,7 @@ Si el segundo devuelve un ticket en TOON format, la integración está lista.
 ## Reglas duras
 
 1. **NO mostrés el API token en la respuesta ni en ningún comando que vayas a ejecutar vos mismo si el user lo compartió en el chat** — copialo solo al comando local de ACLI y avisale que después borre el mensaje. Idealmente, pedile que corra `acli jira auth login` él mismo, no vos.
-2. **Nunca inventes el `project_id`** — si el user no lo sabe, corré `jarvis project list` o pedile que mire su `CLAUDE.md`.
+2. **Nunca inventes el `project_id`** — si el user no lo sabe, corré `jarvis project list` o revisá `.cursor/rules/jarvis-project.mdc` del repo (si existe).
 3. **Nunca inventes el `site`** — si no sabe, decile que mire la URL cuando entra a Jira (lo que está antes de `/jira/...`).
 4. Si el user quiere que ejecutes `jarvis integration set` vos mismo, **confirmá los valores antes** — es acción persistente.
 5. Si `jarvis integration set` falla, revisá en orden: (a) Jarvis instalado y en PATH, (b) `project_id` existe (`jarvis project list`), (c) flags bien escritos (`--site`, `--email`).

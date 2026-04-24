@@ -5,11 +5,11 @@ alwaysApply: false
 
 # Usar Jarvis al refinar tareas
 
-Cuando el user pida refinar, clarificar, desglosar o validar una tarea / requerimiento / feature / historia, usá el MCP de Jarvis (`mcp__jarvis__*`) ANTES de responder con tu propio análisis. Invocá siempre vía `jarvis_run_tool` con `{tool_name, input}` — no rutees por `jarvis_chat`.
+Cuando el user pida refinar, clarificar, desglosar o validar una tarea / requerimiento / feature / historia, Cursor debe usar el MCP de Jarvis (`mcp__jarvis__*`) ANTES de responder con su propio análisis. Invocá siempre vía `jarvis_run_tool` con `{tool_name, input}` — no rutees por `jarvis_chat`.
 
 ## Cómo funcionan realmente las tools de refinamiento
 
-Las tools `refine_*`, `check_*`, `generate_*`, `identify_*` **NO ejecutan análisis**. Devuelven un **prompt scaffold** con reglas del proyecto inyectadas — el LLM invocador (vos) lo procesa y produce el resultado final. El sistema está en dos planos:
+Las tools `refine_*`, `check_*`, `generate_*`, `identify_*` **NO ejecutan análisis**. Devuelven un **prompt scaffold** con reglas del proyecto inyectadas — Cursor (como LLM invocador) lo procesa y produce el resultado final. El sistema está en dos planos:
 
 1. **Generación de scaffolds** (sin persistencia)
 2. **Persistencia iterativa** por `thread_id` (SQLite, tabla `refinements`)
@@ -25,17 +25,17 @@ Las tools `refine_*`, `check_*`, `generate_*`, `identify_*` **NO ejecutan análi
   iteration: 1
   -->
   ```
-  **Extraé ese `thread_id` SÍ o SÍ** — sin él no podés iterar. No hay fallback.
+  **Cursor debe extraer ese `thread_id` SÍ o SÍ** — sin él no podés iterar. No hay fallback.
   Esta primera llamada **no persiste nada** en DB.
 - **Llamadas siguientes (con `thread_id`)**:
   - Si omitís `previous_output`, carga automáticamente el último output guardado del hilo.
   - Si pasás `instructions`, se incluyen en el scaffold como contexto de corrección.
   - El `iteration` se autoincrementa (MAX+1).
-- **Persistencia**: el scaffold **no se guarda solo**. Después de mostrar el resultado al user y obtener aprobación, llamá `refine_save_iteration`.
+- **Persistencia**: el scaffold **no se guarda solo**. Después de mostrar el resultado al user y obtener aprobación, Cursor debe llamar `refine_save_iteration`.
 
 ### `check_definition_of_ready`, `generate_user_stories`, `identify_dependencies`
 
-Scaffolds puros, sin `thread_id`, sin persistencia. Devuelven prompts con reglas inyectadas. Procesá con tu LLM y mostrá el resultado.
+Scaffolds puros, sin `thread_id`, sin persistencia. Devuelven prompts con reglas inyectadas. Cursor los procesa con su LLM y muestra el resultado.
 
 ### Tools de persistencia (solo aplican a `refine_requirements`)
 
@@ -46,7 +46,7 @@ Scaffolds puros, sin `thread_id`, sin persistencia. Devuelven prompts con reglas
 
 ## Tools de código (también scaffolds)
 
-`code_generate`, `code_review`, `code_generate_tests`, `code_generate_commit_message`, `code_debug_error` — **todas devuelven prompts**, no código. Inyectan stack (`storage.stack.list`) + reglas del proyecto vía `resolveRulesForTool`. **Gotcha**: aunque pasés `language`/`framework`, no se valida ni filtra — el cliente debe usarlo al procesar el scaffold.
+`code_generate`, `code_review`, `code_generate_tests`, `code_generate_commit_message`, `code_debug_error` — **todas devuelven prompts**, no código. Inyectan stack (`storage.stack.list`) + reglas del proyecto vía `resolveRulesForTool`. **Gotcha**: aunque pasés `language`/`framework`, no se valida ni filtra — Cursor debe usarlo al procesar el scaffold.
 
 ## Reglas de proyecto: cómo se resuelven
 
@@ -64,23 +64,23 @@ No podés saber cuál nivel consultó sin inspeccionar la DB. Si el output no re
 - `jarvis_project_context` — devuelve `{project, stack[], rules[], integrations[], knowledge[]}`. Usalo para saber qué integraciones están activas antes de llamar tools que las requieren.
 - `jarvis_chat` — chat con Jarvis sobre sí mismo; **NO ejecuta tools** (Ollama/Qwen, text-only).
 
-## Dónde encontrar el `project_id` (si el user lo pregunta o vos lo necesitás)
+## Dónde encontrar el `project_id` (si el user lo pregunta o Cursor lo necesita)
 
-Buscá en este orden — **no preguntes al user hasta agotarlo**:
+Buscá en este orden — **no le preguntes al user hasta agotarlo**:
 
-1. **`./CLAUDE.md` del repo actual** — si el proyecto tiene Jarvis sincronizado localmente (`jarvis mcp sync --project`), el `project_id` está pinneado en el bloque de Jarvis. Buscá líneas como `project_id: <id>` o `Jarvis project: <id>`.
+1. **`.cursor/rules/jarvis-project.mdc`** del repo actual — si el proyecto tiene el pin oficial (`alwaysApply: true`), el `project_id` está ahí. Buscá una línea tipo `Este repo corresponde al proyecto Jarvis: <id>`.
 2. **`jarvis_list_projects`** (MCP) — si hay un solo proyecto que matchea el nombre/contexto del repo, es ese. Si hay varios, mostrale la lista al user y pedile que elija.
 3. **`jarvis project list`** (CLI) — equivalente si estás en terminal.
-4. **Preguntarle al user** — solo si los tres anteriores fallaron. Sugerile correr `jarvis mcp sync --project --project-id <id>` para no volver a tener que adivinarlo.
+4. **Preguntarle al user** — solo si los anteriores fallaron. Sugerile crear la regla de pin (ver `jarvis-project-init` paso 3) para no volver a tener que adivinarlo.
 
 Reglas:
 - Nunca inventes un `project_id` que suene parecido al nombre del repo — siempre confirmá contra `jarvis_list_projects`.
-- Si el `./CLAUDE.md` tiene pin pero `jarvis_list_projects` no lo devuelve, está desincronizado: avisá al user y sugerile re-crear el proyecto o corregir el pin.
+- Si el pin local tiene un ID pero `jarvis_list_projects` no lo devuelve, está desincronizado: avisá al user y sugerile re-crear el proyecto o corregir el pin.
 
 ## Reglas duras
 
 1. **NO inventes** tools, params ni `project_id`. Si falta, `jarvis_list_projects` o preguntá al user.
-2. El `project_id` no lo sabe Jarvis — lo leés del `CLAUDE.md` del proyecto o lo pedís.
+2. El `project_id` no lo sabe Jarvis — lo leés del pin local del repo o de `jarvis_list_projects`.
 3. **No validación previa de integraciones**: si llamás `jira_*` o `n8n_*` en un proyecto sin la integración, el error viene crudo del backend (ACLI, API de n8n). Verificá con `jarvis_project_context` primero.
-4. Los scaffolds son el input del LLM, no el output al user. Después de procesar, mostrá el resultado legible y **persistí con `refine_save_iteration`** si corresponde.
+4. Los scaffolds son el input del LLM de Cursor, no el output al user. Después de procesar, mostrá el resultado legible y **persistí con `refine_save_iteration`** si corresponde.
 5. El header `<!-- refine:meta ... -->` es un comentario HTML — no lo muestres al user, solo extraé el `thread_id` y guardalo para la sesión.

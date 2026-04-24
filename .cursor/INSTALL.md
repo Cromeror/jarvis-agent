@@ -2,6 +2,31 @@
 
 Este documento contiene el prompt para indicarle a Cursor cómo adoptar este set de reglas en otro proyecto, separando **qué conviene global** (User Rules, aplica siempre) y **qué conviene local** (reglas del proyecto, aplica solo acá).
 
+## Prerequisito: registrar Jarvis como MCP en Cursor (una vez por máquina)
+
+Las reglas describen cómo usar las tools `mcp__jarvis__*`, pero Cursor necesita tener el MCP server de Jarvis registrado antes.
+
+1. Buildeá el MCP server en el repo de Jarvis-agent (una vez):
+   ```bash
+   pnpm -C packages/mcp build
+   ```
+2. Abrí (o creá) uno de estos archivos:
+   - Global: `~/.cursor/mcp.json` (aplica a todos los proyectos)
+   - Local: `./.cursor/mcp.json` (solo este proyecto)
+3. Agregá la entrada:
+   ```json
+   {
+     "mcpServers": {
+       "jarvis": {
+         "command": "node",
+         "args": ["<ruta-absoluta-al-clon>/packages/mcp/dist/server.js"]
+       }
+     }
+   }
+   ```
+   Reemplazá `<ruta-absoluta-al-clon>` por el path absoluto del repo de Jarvis-agent. Usá rutas absolutas — ni `~` ni relativas.
+4. **Reiniciá Cursor** para que lo detecte (no recarga `mcp.json` al vuelo). Verificá en **Settings → MCP** que `jarvis` aparezca con tools disponibles.
+
 ## Criterio de separación
 
 | Tipo | Qué va | Por qué |

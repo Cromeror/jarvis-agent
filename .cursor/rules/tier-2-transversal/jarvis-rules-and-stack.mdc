@@ -5,7 +5,7 @@ alwaysApply: false
 
 # Mantener reglas, stack y contexto del proyecto en Jarvis
 
-Cuando el user pida agregar reglas, configurar stack, o se queje de que un scaffold de Jarvis sale genérico/ignora convenciones, usá esta guía. El contexto del proyecto es lo que hace que las tools MCP (`refine_*`, `code_*`, `check_*`, `generate_*`, `identify_*`) devuelvan resultados útiles en vez de prompts vacíos.
+Cuando el user pida agregar reglas, configurar stack, o se queje de que un scaffold de Jarvis sale genérico/ignora convenciones, Cursor debe usar esta guía. El contexto del proyecto es lo que hace que las tools MCP (`refine_*`, `code_*`, `check_*`, `generate_*`, `identify_*`) devuelvan resultados útiles en vez de prompts vacíos.
 
 ## Cómo Jarvis inyecta contexto en los scaffolds
 
@@ -71,10 +71,10 @@ Layers típicas: `backend`, `frontend`, `database`, `infra`, `testing`, `package
 
 ## Flujo: verificar contexto actual
 
-Antes de agregar reglas/stack, siempre inspeccioná qué ya hay:
+Antes de agregar reglas/stack, Cursor siempre debe inspeccionar qué ya hay:
 
 ```bash
-# MCP (desde Cursor/Claude Code)
+# MCP (desde Cursor)
 jarvis_project_context { project_id: "<id>" }
 
 # CLI
@@ -104,5 +104,5 @@ jarvis project stack list <project_id>
 1. **Antes de agregar una regla nueva, chequeá si ya existe** — `jarvis project rules list <id> -c <categoría>`. Evitá duplicados (la DB deduplica pero solo a nivel `(project_id, category, rule, priority, tool_name)`).
 2. **Si el user pide "que Jarvis use X convención", preguntá la categoría** — o sugerila según la descripción. No agregues reglas sin categoría clara.
 3. **No inventes stacks** — preguntá qué lenguaje/framework usa el proyecto antes de correr `stack set`.
-4. **Si vas a ejecutar `jarvis project rules add` o `stack set` vos mismo, son interactivos** — no se pueden automatizar fácilmente desde shell sin input. Ofrecé al user los inputs armados y pedile que los corra él, o usá `expect`/pipe con cuidado.
-5. **Re-sync el CLAUDE.md después de cambios grandes de contexto** — `jarvis mcp sync --project --project-id <id>` para que el bloque local refleje las integraciones actualizadas (no incluye reglas/stack, pero sí integraciones).
+4. **Si vas a ejecutar `jarvis project rules add` o `stack set` vos mismo, son interactivos** — no se pueden automatizar fácilmente desde shell sin input. Ofrecé al user los inputs armados y pedile que los corra él.
+5. **Los cambios de reglas/stack son inmediatos** — la próxima llamada a una tool MCP ya los va a ver vía `resolveRulesForTool` y `storage.stack.list`. No hace falta sync ni reinicio.
