@@ -1,0 +1,87 @@
+---
+description: Usar las tools code_* de Jarvis (code_generate, code_review, code_generate_tests, code_generate_commit_message, code_debug_error) correctamente, entendiendo que son scaffolds que inyectan stack + reglas del proyecto. Aplicar cuando el user pida generar código, revisar código, escribir tests, armar un mensaje de commit, o debuggear un error con contexto del proyecto.
+alwaysApply: false
+---
+
+# Usar las tools `code_*` de Jarvis
+
+Cuando el user pida generar / revisar / testear código, armar un mensaje de commit, o debuggear un error **con contexto del proyecto**, usá las tools `code_*` vía `jarvis_run_tool`. Si el pedido no implica contexto del proyecto (ej: "¿cómo ordeno un array en JS?"), respondelo directo — no hace falta Jarvis.
+
+## Concepto clave: son scaffolds, no ejecutores
+
+**Las tools `code_*` NO generan/revisan código por sí solas.** Devuelven un prompt estructurado con:
+- El **stack del proyecto** (`jarvis project stack list`) — lenguaje, framework, package manager, etc.
+- Las **reglas del proyecto** vía `resolveRulesForTool(..., 'code_conventions')` — convenciones, anti-patrones, estilos.
+- Instrucciones genéricas de la categoría (generar código, revisar, etc.).
+
+Vos (el agente invocador) recibís ese prompt como string y lo **procesás con tu propio LLM** para producir el output real. El user ve el output de tu LLM, no el scaffold crudo.
+
+**Corolario**: si el proyecto no tiene stack ni reglas configuradas, el scaffold sale genérico — y el output también. Antes de invocar, **chequeá el contexto**.
+
+## Pre-chequeo antes de invocar
+
+Primera vez que vas a usar `code_*` en un proyecto, corré:
+```
+jarvis_project_context { project_id: "<id>" }
+```
+Verificá que `stack[]` y `rules[]` tengan contenido relevante. Si están vacíos:
+- Sugerí al user configurar stack con `jarvis project stack set <id>` (interactivo).
+- Sugerí agregar reglas con `jarvis project rules add <id>` en categoría `code_conventions`.
+- Ver regla `jarvis-rules-and-stack` para guía completa.
+
+No bloquees el flujo — podés invocar igual y el scaffold va a ser genérico, pero avisale al user que el output va a mejorar cuando haya contexto.
+
+## Catálogo de tools `code_*`
+
+### `code_generate`
+
+Params: `description*` (qué generar), `language` (opcional), `project_id`.
+
+Flujo típico:
+1. Invocar con la descripción del user y el `project_id`.
+2. Recibir el scaffold — ya incluye stack + reglas + la descripción.
+3. Procesar con tu LLM y devolver al user el código final formateado en el lenguaje del stack.
+4. Preguntar al user dónde quiere que lo pegues (archivo, ubicación) si corresponde.
+
+**Gotcha**: si pasás `language` pero el stack del proyecto dice otra cosa, el scaffold incluye ambos datos — el LLM va a usar `language` como override. Pero no hay validación, así que si el mismatch es un error del user, aclaralo.
+
+### `code_review`
+
+Params: `code*` (el código a revisar), `language` (opcional), `project_id`.
+
+El scaffold incluye checklist de: correctness, security, performance, maintainability, tests. Procesalo con tu LLM y devolvé la review al user como lista de hallazgos con severidad (CRITICAL / WARNING / SUGGESTION).
+
+**Uso típico**: el user te pega código y pide "revisá esto contra las convenciones del proyecto". Ideal después de cambios grandes, antes de PR.
+
+### `code_generate_tests`
+
+Params: `code*` (código a testear), `language` (opcional), `framework` (opcional), `project_id`.
+
+Si el stack del proyecto registra un testing framework (ej: `vitest`, `jest`), el scaffold lo usa. Si pasás `framework` explícito, override. Si no hay ninguno, el LLM elige uno genérico — avisá al user que especifique.
+
+### `code_generate_commit_message`
+
+Params: `diff*` (el output de `git diff`), `project_id`.
+
+Flujo:
+1. Correr `git diff` (staged o working) y pasar el output como `diff`.
+2. El scaffold incluye la regla de estilo de commits del proyecto (si hay una en categoría `git` o similar).
+3. Procesar con tu LLM, devolver el mensaje al user.
+4. Confirmar antes de commitear (no ejecutés `git commit` sin aprobación explícita).
+
+**Tip**: si el proyecto usa Conventional Commits, agregá una regla `[git] Usar Conventional Commits: <type>(<scope>): <subject>` para que el scaffold lo incluya.
+
+### `code_debug_error`
+
+Params: `error*` (stacktrace o mensaje), `context` (opcional, código alrededor), `project_id`.
+
+Scaffold para análisis con contexto del stack. Útil cuando el error tiene que ver con algo específico del proyecto (librerías del stack, config). Si es un error genérico de lenguaje, no hace falta Jarvis.
+
+## Reglas duras
+
+1. **Los scaffolds son input para tu LLM, no output para el user** — nunca le pegues el scaffold crudo. Procesá y devolvé el resultado en formato legible.
+2. **Verificá stack antes de invocar por primera vez en un proyecto** — sin stack los scaffolds salen genéricos.
+3. **Para `code_generate_commit_message`, el `diff` tiene que ser reciente** — no uses un diff viejo que ya no refleja el estado actual. Corré `git diff` en el momento.
+4. **Nunca ejecutés `git commit` ni `git push` sin confirmación del user** después de generar el mensaje — son efectos persistentes.
+5. **Si el user se queja de que el output es genérico**, no es bug de la tool — es falta de stack/reglas. Redirigí a la regla `jarvis-rules-and-stack` y ofrecé configurarlo juntos.
+6. **`language` y `framework` son overrides**, no requeridos. Dejalos vacíos si el stack ya los describe — redundancia no suma.

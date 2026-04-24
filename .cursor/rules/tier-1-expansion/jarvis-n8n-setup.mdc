@@ -1,0 +1,73 @@
+---
+description: Guiar al user para configurar la integración n8n en Jarvis. Aplicar cuando pida "configurar n8n", "conectar n8n con jarvis", "setup n8n", "integrar n8n", o cuando tools n8n_* fallen por falta de integración.
+alwaysApply: false
+---
+
+# Configurar integración n8n en Jarvis
+
+Cuando el user pida configurar n8n en Jarvis (variantes: "configurar n8n", "conectar n8n con jarvis", "setup n8n", "integrar n8n", "jarvis no puede disparar workflows"), guialo por este flujo.
+
+## Contexto
+
+La integración n8n en Jarvis guarda `{url, api_key}` para que las tools `n8n_*` puedan hablar con la instancia de n8n del user. A diferencia de Jira (que delega auth a ACLI), n8n usa el API key directamente — **Jarvis sí guarda el secreto** en su DB local.
+
+## Prerequisitos
+
+- Una instancia de n8n accesible por URL (self-hosted, cloud, o local).
+- Permiso para generar API keys en esa instancia.
+
+## Flujo paso a paso
+
+### Paso 1 — Datos que necesito del user
+
+Preguntale estos valores:
+
+1. **`project_id` de Jarvis** — ID del proyecto donde va a vivir la integración. Buscá en este orden:
+   a. `./CLAUDE.md` del repo — buscá pin de Jarvis.
+   b. `jarvis_list_projects` (MCP) o `jarvis project list` (CLI).
+   c. Preguntale al user si los anteriores fallan.
+
+2. **URL de n8n** — URL completa de la instancia (ej: `https://n8n.miempresa.com`, `http://localhost:5678`). **Incluir protocolo**. Sin trailing slash.
+
+3. **API key** — generado en la UI de n8n:
+   - Login en n8n → **Settings** (ícono de usuario) → **API** (o **Personal API Keys**).
+   - Click en **Create an API key** / **Generate**.
+   - Copiar la clave (se muestra una sola vez).
+   - **Nunca lo muestres en el chat ni lo loguees** — es secreto. Pedile al user que lo tenga a mano para el comando, no que lo pegue al chat.
+
+### Paso 2 — Registrar la integración en Jarvis
+
+Armá el comando con los datos del user:
+
+```bash
+jarvis integration set <project_id> n8n --url <URL> --api-key <API_KEY>
+```
+
+Ejemplo:
+```bash
+jarvis integration set cash n8n --url https://n8n.miempresa.com --api-key n8n_abc123...
+```
+
+Ofrecé **dos opciones**:
+- **A) Que lo corra el user** — mostrale el comando (con placeholder para el API key, no con el valor real).
+- **B) Que lo corras vos** — si el user prefiere, ejecutalo vía terminal. **Confirmá antes** — es acción persistente y escribe el secreto en la DB de Jarvis. Idealmente, que lo corra el user para que el API key no pase por el chat.
+
+### Paso 3 — Verificar
+
+```bash
+jarvis integration list <project_id>                            # confirma registro
+jarvis tool run n8n_list_workflows -p project_id=<project_id>   # prueba conectividad
+```
+Si `n8n_list_workflows` devuelve lista en TOON format, la integración está lista.
+
+### Paso 4 (opcional) — Registrar workflows del proyecto
+
+Si el user ya tiene workflows en n8n que quiere usar desde Jarvis, ver regla `jarvis-n8n-workflows` para cómo registrarlos en el project registry.
+
+## Reglas duras
+
+1. **NO mostrés el API key en la respuesta** — ni en ningún comando que ejecutes vos si el user lo compartió en el chat. Idealmente que lo pegue directo en la terminal.
+2. **Nunca inventes el `project_id` ni la URL** — si el user no sabe la URL, decile que la mire en la barra del browser cuando está en n8n.
+3. **Verificá accesibilidad antes de registrar**: si el user no está seguro de la URL, probá `curl <URL>/healthz` o abrila en el browser primero. Jarvis no valida hasta la primera llamada.
+4. Si `n8n_list_workflows` falla después del setup, revisá: (a) URL correcta con protocolo, (b) API key válido en la UI de n8n, (c) firewall/red entre la máquina del user y n8n.
+5. Si el proyecto no está creado en Jarvis todavía, redirigí a la regla `jarvis-project-init` antes de hacer `integration set`.

@@ -1,0 +1,110 @@
+---
+description: Usar workflows de n8n vía Jarvis — listar, disparar, consultar estado, y gestionar el registry de workflows por proyecto. Aplicar cuando el user pida "disparar workflow", "listar workflows", "registrar workflow en el proyecto", "ejecutar X en n8n desde jarvis".
+alwaysApply: false
+---
+
+# Workflows de n8n con Jarvis
+
+Cuando el user pida interactuar con workflows de n8n vía Jarvis (listar, disparar, consultar estado, registrar en un proyecto), usá las tools `n8n_*` y `project_*workflow*` vía `jarvis_run_tool`.
+
+## Prerequisito
+
+El proyecto debe tener la integración `n8n` activa. Si no, redirigí a la regla `jarvis-n8n-setup`. Verificá con:
+```
+jarvis_project_context { project_id: "<id>" }
+```
+→ buscá `service === 'n8n'` en `integrations[]`.
+
+## Dos capas: instancia vs. registry del proyecto
+
+Importante entender la diferencia:
+
+- **Instancia n8n** (global): tiene todos los workflows del user/equipo. Accesible con `n8n_list_workflows` (lista la instancia entera).
+- **Registry del proyecto Jarvis** (por proyecto): subset curado de workflows que el proyecto usa. Accesible con `project_list_workflows`.
+
+El registry sirve para que las tools/agentes sepan qué workflows son relevantes **en el contexto de este proyecto**, con metadata extra (nombre kebab-case, description, local_path opcional del JSON).
+
+## Tools (requieren integración `n8n`)
+
+### `n8n_list_workflows`
+
+Params: `project_id`.
+Devuelve lista completa de workflows de la instancia (id, name, active, updatedAt) en TOON format.
+Úselo para descubrir qué hay disponible en la instancia.
+
+### `n8n_trigger_workflow`
+
+Params: `workflow_id*`, `data` (opcional, JSON payload), `project_id`.
+Dispara un workflow. **Efecto externo real** — pedí confirmación explícita al user antes de ejecutar, especialmente si el workflow escribe en sistemas (envía emails, crea tickets, modifica DBs).
+
+### `n8n_get_execution_status`
+
+Params: `execution_id*`, `project_id`.
+Consulta estado de una ejecución. Devuelve `{id, status, workflowId, startedAt, stoppedAt, error?}` en TOON.
+**Flujo típico**: disparás con `n8n_trigger_workflow`, recibís un `execution_id`, consultás status después. Si querés polling, hacelo con delays razonables (2-5s) — no spamees.
+
+### `project_register_workflow` — dos modos
+
+Params: `project_id*`, `purpose`, `name`, `description`, `n8n_workflow_id`, `local_path`.
+
+**Modo 1 — guía (sin `n8n_workflow_id`)**:
+Si invocás sin `n8n_workflow_id`, devuelve un prompt en español con instrucciones para:
+1. Crear el JSON del workflow localmente.
+2. Subirlo a n8n manualmente.
+3. Obtener el `n8n_workflow_id` desde la URL del workflow en n8n.
+4. Volver a invocar esta tool con el ID.
+
+Este modo es útil cuando el user quiere crear un workflow desde cero — Jarvis le arma la checklist.
+
+**Modo 2 — persistencia (con `n8n_workflow_id`)**:
+Valida que el workflow exista en n8n, y hace upsert en la tabla `project_workflows` por `(project_id, name)`. Si registrás el mismo `name` dos veces, **actualiza** la fila existente.
+
+Convención: `name` en kebab-case (ej: `send-jira-notification`, `sync-user-data`).
+
+### `project_list_workflows`
+
+Params: `project_id*`.
+Lista los workflows **registrados para el proyecto** (no toda la instancia). Devuelve nombre, descripción, `n8n_workflow_id`, `local_path` + reglas de uso, en TOON format.
+
+### `project_unregister_workflow`
+
+Params: `project_id*`, `name*`.
+Elimina la entrada del registry de Jarvis. **NO borra el workflow en n8n** — solo lo saca del registry local. El workflow sigue activo en n8n.
+
+## Flujos típicos
+
+### "Disparar workflow X"
+
+1. `project_list_workflows` o `n8n_list_workflows` para ubicar el `workflow_id` (preferí el registry si el workflow está ahí — ya tiene contexto del proyecto).
+2. Si tiene payload, armá el `data` como objeto JSON plano.
+3. **Confirmá con el user** qué va a disparar y con qué data.
+4. `n8n_trigger_workflow { workflow_id, data, project_id }`.
+5. Devolvé el `execution_id` al user.
+6. Si pide seguimiento, `n8n_get_execution_status` con el `execution_id`.
+
+### "Qué workflows hay disponibles para este proyecto"
+
+1. `project_list_workflows` primero (subset curado).
+2. Si está vacío o el user pregunta por todos, `n8n_list_workflows` (toda la instancia).
+3. Sugerí registrar los que falten con `project_register_workflow` si el user quiere curar el registry.
+
+### "Registrar un workflow ya existente en n8n"
+
+1. Obtené el `n8n_workflow_id` desde la UI de n8n (está en la URL).
+2. `project_register_workflow { project_id, name, description, n8n_workflow_id, local_path? }`.
+3. Confirmá con `project_list_workflows`.
+
+### "Crear un workflow nuevo"
+
+1. Invocá `project_register_workflow` **sin** `n8n_workflow_id` — recibís el prompt guía.
+2. Pasale la guía al user (armá el JSON, subilo a n8n, obtené el ID).
+3. Cuando el user vuelva con el ID, repetí con modo persistencia.
+
+## Reglas duras
+
+1. **`n8n_trigger_workflow` es acción con efecto real** — siempre pedí confirmación al user antes de ejecutar, aclarando qué workflow dispara y con qué data. Si el workflow tiene side effects destructivos (borra data, envía mails masivos), doble confirmación.
+2. **No inventes `workflow_id`** — siempre obtenelo de `n8n_list_workflows` o `project_list_workflows`.
+3. **Polling de ejecuciones con delays razonables** — 2-5s entre llamadas a `n8n_get_execution_status`. No loopees sin delay.
+4. **Registry es upsert por `(project_id, name)`** — si registrás el mismo `name`, reemplaza silenciosamente. Cambiá `name` si querés convivir dos variantes.
+5. **`project_unregister_workflow` no borra el workflow en n8n** — aclaráselo al user si pide "borrar" un workflow: para borrar en n8n hay que ir a la UI.
+6. **Si una tool `n8n_*` falla con error de conectividad**, redirigí a la regla `jarvis-doctor-and-troubleshooting` (sección D).
