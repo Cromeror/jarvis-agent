@@ -64,6 +64,19 @@ No podés saber cuál nivel consultó sin inspeccionar la DB. Si el output no re
 - `jarvis_project_context` — devuelve `{project, stack[], rules[], integrations[], knowledge[]}`. Usalo para saber qué integraciones están activas antes de llamar tools que las requieren.
 - `jarvis_chat` — chat con Jarvis sobre sí mismo; **NO ejecuta tools** (Ollama/Qwen, text-only).
 
+## Dónde encontrar el `project_id` (si el user lo pregunta o vos lo necesitás)
+
+Buscá en este orden — **no preguntes al user hasta agotarlo**:
+
+1. **`./CLAUDE.md` del repo actual** — si el proyecto tiene Jarvis sincronizado localmente (`jarvis mcp sync --project`), el `project_id` está pinneado en el bloque de Jarvis. Buscá líneas como `project_id: <id>` o `Jarvis project: <id>`.
+2. **`jarvis_list_projects`** (MCP) — si hay un solo proyecto que matchea el nombre/contexto del repo, es ese. Si hay varios, mostrale la lista al user y pedile que elija.
+3. **`jarvis project list`** (CLI) — equivalente si estás en terminal.
+4. **Preguntarle al user** — solo si los tres anteriores fallaron. Sugerile correr `jarvis mcp sync --project --project-id <id>` para no volver a tener que adivinarlo.
+
+Reglas:
+- Nunca inventes un `project_id` que suene parecido al nombre del repo — siempre confirmá contra `jarvis_list_projects`.
+- Si el `./CLAUDE.md` tiene pin pero `jarvis_list_projects` no lo devuelve, está desincronizado: avisá al user y sugerile re-crear el proyecto o corregir el pin.
+
 ## Reglas duras
 
 1. **NO inventes** tools, params ni `project_id`. Si falta, `jarvis_list_projects` o preguntá al user.

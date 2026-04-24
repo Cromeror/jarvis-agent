@@ -129,6 +129,16 @@ Ofrecé al user estos opcionales según lo que vaya a hacer con el proyecto:
   git add CLAUDE.md && git commit -m "chore: sync Jarvis context block"
   ```
 
+## Dónde encontrar el `project_id` después del setup
+
+Una vez creado el proyecto, cuando alguien (user u otro agente) pregunte "¿cuál es el `project_id` de este repo?", buscá en este orden:
+
+1. **`./CLAUDE.md` del repo** — si se corrió el paso 4 (`jarvis mcp sync --project --project-id <id>`), el ID queda pinneado en el bloque de Jarvis. Es la fuente de verdad local.
+2. **`jarvis_list_projects`** (MCP) o **`jarvis project list`** (CLI) — lista todos los proyectos registrados en la DB de Jarvis.
+3. **`jarvis project show <candidato>`** — si sospechás el ID, confirmalo acá.
+
+Si no aparece en ninguno, el proyecto no está registrado — volvé al paso 2 de este flujo.
+
 ## Reglas duras
 
 1. **Nunca inventes un `project_id`** que ya exista — siempre `jarvis project list` primero. Si el user insiste en reusar uno existente, confirmá que entiende que va a compartir reglas/stack/integraciones con el proyecto previo.

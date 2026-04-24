@@ -25,9 +25,10 @@ Antes de arrancar, preguntale al user:
 
 Preguntale estos 4 valores (uno por uno o todos juntos, como le quede mejor):
 
-1. **`project_id` de Jarvis** — el ID del proyecto en Jarvis donde va a vivir la integración (ej: `lx`, `cash`, `pld-api`). Si no lo sabe, sugerile:
-   - Buscá en el `CLAUDE.md` del proyecto.
-   - O corré `jarvis project list` para verlos todos.
+1. **`project_id` de Jarvis** — el ID del proyecto en Jarvis donde va a vivir la integración (ej: `lx`, `cash`, `pld-api`). Buscalo en este orden antes de preguntar:
+   a. `./CLAUDE.md` del repo actual — buscá el pin de Jarvis (`project_id: <id>`).
+   b. `jarvis_list_projects` (MCP) o `jarvis project list` (CLI) — lista todos.
+   c. Preguntale al user solo si los anteriores fallaron. Si el proyecto no existe en Jarvis, sugerile crearlo primero con la regla `jarvis-project-init`.
 2. **Site de Atlassian** — dominio sin `https://` (ej: `miorg.atlassian.net`).
 3. **Email** — el de su cuenta Atlassian.
 4. **API token** — el generado en el paso 0.2. **Nunca lo muestres en el chat ni lo loguees** — es secreto; pedile que lo tenga a mano solo para el comando de ACLI.
