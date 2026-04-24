@@ -1,0 +1,73 @@
+---
+description: Usar Jarvis (MCP mcp__jarvis__*) al refinar, clarificar, desglosar o validar tareas/requerimientos/features. Aplicar a cualquier pedido de refinamiento.
+alwaysApply: false
+---
+
+# Usar Jarvis al refinar tareas
+
+Cuando el user pida refinar, clarificar, desglosar o validar una tarea / requerimiento / feature / historia, usá el MCP de Jarvis (`mcp__jarvis__*`) ANTES de responder con tu propio análisis. Invocá siempre vía `jarvis_run_tool` con `{tool_name, input}` — no rutees por `jarvis_chat`.
+
+## Cómo funcionan realmente las tools de refinamiento
+
+Las tools `refine_*`, `check_*`, `generate_*`, `identify_*` **NO ejecutan análisis**. Devuelven un **prompt scaffold** con reglas del proyecto inyectadas — el LLM invocador (vos) lo procesa y produce el resultado final. El sistema está en dos planos:
+
+1. **Generación de scaffolds** (sin persistencia)
+2. **Persistencia iterativa** por `thread_id` (SQLite, tabla `refinements`)
+
+## Tools de refinamiento
+
+### `refine_requirements` — única con flujo iterativo
+
+- **Primera llamada (sin `thread_id`)**: el tool **genera un UUID** y lo devuelve dentro de un header HTML al inicio de la respuesta:
+  ```
+  <!-- refine:meta
+  thread_id: <UUID>
+  iteration: 1
+  -->
+  ```
+  **Extraé ese `thread_id` SÍ o SÍ** — sin él no podés iterar. No hay fallback.
+  Esta primera llamada **no persiste nada** en DB.
+- **Llamadas siguientes (con `thread_id`)**:
+  - Si omitís `previous_output`, carga automáticamente el último output guardado del hilo.
+  - Si pasás `instructions`, se incluyen en el scaffold como contexto de corrección.
+  - El `iteration` se autoincrementa (MAX+1).
+- **Persistencia**: el scaffold **no se guarda solo**. Después de mostrar el resultado al user y obtener aprobación, llamá `refine_save_iteration`.
+
+### `check_definition_of_ready`, `generate_user_stories`, `identify_dependencies`
+
+Scaffolds puros, sin `thread_id`, sin persistencia. Devuelven prompts con reglas inyectadas. Procesá con tu LLM y mostrá el resultado.
+
+### Tools de persistencia (solo aplican a `refine_requirements`)
+
+- `refine_save_iteration` — persiste el output aprobado. Autoincrementa `iteration`. **Gotcha**: si el hilo ya estaba `completed`, lo **reabre** automáticamente a `in_progress`.
+- `refine_finalize` — `UPDATE refinements SET status='completed'` para todas las iteraciones del hilo. Idempotente. **NO es inmutable**: guardar después reabre el hilo.
+- `refine_list_iterations` — lista ordenada por `iteration ASC`. Vacío si no existe el hilo.
+- `refine_get_latest` — última iteración. `null` si no existe.
+
+## Tools de código (también scaffolds)
+
+`code_generate`, `code_review`, `code_generate_tests`, `code_generate_commit_message`, `code_debug_error` — **todas devuelven prompts**, no código. Inyectan stack (`storage.stack.list`) + reglas del proyecto vía `resolveRulesForTool`. **Gotcha**: aunque pasés `language`/`framework`, no se valida ni filtra — el cliente debe usarlo al procesar el scaffold.
+
+## Reglas de proyecto: cómo se resuelven
+
+`resolveRulesForTool` tiene fallback en cascada:
+1. Reglas específicas de la tool (`tool_name = 'refine_requirements'`)
+2. Si no hay, reglas de la categoría (ej. `refinement`, `code_conventions`)
+3. Si no hay, **TODAS las reglas del proyecto**
+4. Si no hay nada, string vacío
+
+No podés saber cuál nivel consultó sin inspeccionar la DB. Si el output no refleja una regla que esperabas, falta registrarla en el nivel correcto.
+
+## Descubrimiento de contexto
+
+- `jarvis_list_projects` — array de `{id, name, description, sector, status, created_at, updated_at}`.
+- `jarvis_project_context` — devuelve `{project, stack[], rules[], integrations[], knowledge[]}`. Usalo para saber qué integraciones están activas antes de llamar tools que las requieren.
+- `jarvis_chat` — chat con Jarvis sobre sí mismo; **NO ejecuta tools** (Ollama/Qwen, text-only).
+
+## Reglas duras
+
+1. **NO inventes** tools, params ni `project_id`. Si falta, `jarvis_list_projects` o preguntá al user.
+2. El `project_id` no lo sabe Jarvis — lo leés del `CLAUDE.md` del proyecto o lo pedís.
+3. **No validación previa de integraciones**: si llamás `jira_*` o `n8n_*` en un proyecto sin la integración, el error viene crudo del backend (ACLI, API de n8n). Verificá con `jarvis_project_context` primero.
+4. Los scaffolds son el input del LLM, no el output al user. Después de procesar, mostrá el resultado legible y **persistí con `refine_save_iteration`** si corresponde.
+5. El header `<!-- refine:meta ... -->` es un comentario HTML — no lo muestres al user, solo extraé el `thread_id` y guardalo para la sesión.

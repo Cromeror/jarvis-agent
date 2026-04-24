@@ -1,0 +1,70 @@
+---
+description: Refinar tickets de Jira usando Jarvis (jira_* + refine_* tools vía MCP mcp__jarvis__*). Aplicar cuando el user pida analizar/refinar/clarificar un ticket Jira por clave (ej LXM-123, PLD-456).
+alwaysApply: false
+---
+
+# Refinar tickets de Jira usando Jarvis
+
+Cuando el user pida refinar / clarificar / analizar un ticket de Jira (ej: "refiná LXM-473", "¿está listo este ticket?", "desglosá PLD-123"), seguí este flujo con el MCP `mcp__jarvis__*`.
+
+## Prerequisitos
+
+- El proyecto debe tener la integración `jira` activa. Verificá con `jarvis_project_context` — buscá `service === 'jira'` en `integrations[]`.
+- La máquina debe tener **ACLI (Atlassian CLI)** instalado y en PATH. Si no, las tools fallan con instrucciones de instalación claras.
+- La config Jira es `{site, email}` — no hay validación de credenciales en setup, falla lazy en primer uso.
+
+## Flujo estándar
+
+1. **Identificá el `project_id`** del `CLAUDE.md` del proyecto. Si no está, `jarvis_list_projects` o pedíselo al user. **Nunca lo inventes**.
+
+2. **Traé el ticket**:
+   ```
+   tool_name: "jira_get_ticket"
+   input: { ticket_id: "<KEY-123>", project_id: "<project_id>" }
+   ```
+   Por debajo ejecuta `acli jira workitem view <id> --json` y convierte el JSON a **TOON format** (formato comprimido para LLMs: `key: value`, arrays como `key[N]: v1,v2,v3`, arrays de objetos uniformes como `key[N]{f1,f2}:` + filas indentadas).
+
+3. **Elegí la tool de refinamiento** según lo que pida el user:
+   - Refinar descripción → `refine_requirements` con `requirements` = descripción del ticket (con su `thread_id` iterativo).
+   - Validar DoR → `check_definition_of_ready` con `ticket_description`.
+   - Descomponer en historias → `generate_user_stories` con `feature_description`.
+   - Mapear dependencias → `identify_dependencies` con `requirements`.
+
+   Todas devuelven **scaffolds con reglas del proyecto inyectadas**. Procesalos con tu LLM y producí el output final.
+
+4. **Mostrá el resultado al user** en formato legible (Markdown) y pedí aprobación o correcciones.
+
+5. **Persistí la iteración** (solo `refine_requirements`):
+   ```
+   tool_name: "refine_save_iteration"
+   input: { thread_id, output, instructions?, requirements?, project_id }
+   ```
+   Extraé el `thread_id` del header `<!-- refine:meta thread_id: … iteration: … -->` de la primera respuesta. Guardalo en tu memoria de sesión — lo vas a necesitar para toda iteración siguiente.
+
+6. **Iterá** reusando el mismo `thread_id` + `instructions` con las correcciones del user. Si omitís `previous_output`, el tool carga solo el último guardado.
+
+7. **Cuando el user confirme "listo"** → `refine_finalize` con el `thread_id`.
+   **Gotcha**: no es inmutable. Si después llamás `refine_save_iteration`, **reabre el hilo a `in_progress`**. Si querés asegurar que quede cerrado, no guardes más después de finalizar.
+
+8. **Opcional — escribir de vuelta a Jira**:
+   - `jira_add_comment` con `{ticket_id, comment, project_id}`. El comentario se pasa a `acli jira workitem comment ... --body "<escapado>"`; las comillas dobles internas se escapan, **otros caracteres shell no** — no metas backticks ni `$()` en el comment.
+   - `jira_transition_ticket` con `{ticket_id, transition, project_id}`. **`transition` es el NOMBRE** de la transición (string, ej. "Ready for Dev"), no un ID numérico. ACLI lo resuelve.
+   - **Pedí confirmación explícita al user** antes de cualquier escritura — son acciones visibles para todo el equipo.
+
+## Tools de Jira (requieren integración `jira`)
+
+| Tool | Params | Qué hace |
+|------|--------|----------|
+| `jira_get_ticket` | `ticket_id*, project_id` | `acli jira workitem view --json` → TOON |
+| `jira_list_my_tickets` | `project_key, status, project_id` | JQL `assignee = currentUser()` + filtros → TOON |
+| `jira_add_comment` | `ticket_id*, comment*, project_id` | `acli jira workitem comment` |
+| `jira_transition_ticket` | `ticket_id*, transition*, project_id` | `acli jira workitem transition` (transition por nombre) |
+
+## Reglas duras
+
+1. Si el proyecto no tiene integración `jira` → avisá al user y parate. No inventes contenido del ticket.
+2. `ticket_id` ausente o malformado → preguntá, no asumas.
+3. Nunca `jira_transition_ticket` ni `jira_add_comment` sin confirmación explícita del user — son efectos externos visibles para todo el equipo.
+4. El `thread_id` del header HTML es tu única forma de iterar — guardalo apenas llegue la primera respuesta.
+5. Después de `refine_finalize`, no guardes más iteraciones al mismo hilo salvo que el user quiera reabrirlo explícitamente — reabre silenciosamente el status a `in_progress`.
+6. Si una tool Jira falla, revisá primero: (a) ACLI instalado, (b) integración configurada con `site`+`email` correctos, (c) `project_id` correcto.
