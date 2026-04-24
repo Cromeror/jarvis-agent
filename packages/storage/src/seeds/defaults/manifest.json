@@ -1,0 +1,14 @@
+{
+  "$schema": "./schema.json",
+  "version": 1,
+  "knowledge": [
+    {
+      "slug": "jira-description-format",
+      "file": "knowledge/jira-description-format.md",
+      "title": "Formato de descripciones Jira (jira_update_ticket)",
+      "tags": ["jira", "formato", "descripciones", "markdown", "adf", "reference", "toon"],
+      "applyTo": "integration:jira"
+    }
+  ],
+  "rules": []
+}

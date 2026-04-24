@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import type { Storage } from '@jarvis/storage';
+import { applyDefaults, type Storage } from '@jarvis/storage';
 
 const SERVICE_SCHEMAS: Record<string, { fields: string[]; required: string[] }> = {
   jira:   { fields: ['site', 'email'], required: ['site', 'email'] },
@@ -76,6 +76,18 @@ export function integrationSet(
 
   storage.integrations.set(projectId, service, config);
   console.log(chalk.green(`Integration ${service} set for ${projectId}`));
+
+  // Auto-apply default contexts that target this project (e.g. integration:jira)
+  try {
+    const result = applyDefaults(storage, { projectId });
+    const inserted = result.appliedKnowledge.filter((k) => k.action === 'inserted');
+    if (inserted.length > 0) {
+      console.log(chalk.gray(`  + applied ${inserted.length} default context${inserted.length > 1 ? 's' : ''}: ${inserted.map((k) => k.slug).join(', ')}`));
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(chalk.yellow(`  ⚠ Could not apply default contexts: ${msg}`));
+  }
 }
 
 export function integrationRemove(storage: Storage, projectId: string, service: string): void {

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import chalk from 'chalk';
-import { createStorage } from '@jarvis/storage';
+import { applyDefaults, createStorage } from '@jarvis/storage';
 import type { CliConfig } from '../config.js';
 
 export function setupCommand(config: CliConfig): void {
@@ -15,6 +15,21 @@ export function setupCommand(config: CliConfig): void {
   // Seed demo data
   storage.seed();
   console.log(chalk.green('✓ Demo data seeded'));
+
+  // Apply default contexts (knowledge, rules) that match current projects
+  try {
+    const result = applyDefaults(storage);
+    const inserted = result.appliedKnowledge.filter((k) => k.action === 'inserted').length;
+    const skipped = result.appliedKnowledge.filter((k) => k.action === 'skipped').length;
+    if (inserted > 0) {
+      console.log(chalk.green(`✓ Default contexts applied (${inserted} inserted${skipped > 0 ? `, ${skipped} skipped` : ''})`));
+    } else if (skipped > 0) {
+      console.log(chalk.gray(`  Default contexts already present (${skipped} skipped)`));
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(chalk.yellow(`⚠ Could not apply default contexts: ${msg}`));
+  }
 
   // Sync cognitive base
   if (existsSync(config.cognitiveBasePath)) {

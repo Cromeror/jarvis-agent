@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.lib.json",
+    "build": "tsc -p tsconfig.lib.json && node scripts/copy-seeds.mjs",
     "test": "vitest run",
     "dev": "tsc -p tsconfig.lib.json --watch"
   },

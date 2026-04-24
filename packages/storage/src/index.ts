@@ -43,6 +43,8 @@ export type {
 // Re-export database initializer
 export { initDatabase } from "./database.js";
 export { seedDatabase } from "./seed.js";
+export { applyDefaults } from "./seeds/apply-defaults.js";
+export type { ApplyDefaultsOptions, ApplyDefaultsResult } from "./seeds/apply-defaults.js";
 
 // ---------------------------------------------------------------------------
 // Storage type

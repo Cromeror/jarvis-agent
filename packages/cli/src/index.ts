@@ -23,6 +23,7 @@ import { n8nExport } from './commands/n8n.js';
 import { mcpInstall, mcpUpdate, mcpUninstall, mcpStatus, mcpSync } from './commands/mcp.js';
 import { refineSave, refineIterate, refineList, refineShow, refineFinalize } from './commands/refine.js';
 import { projectWorkflowAdd, projectWorkflowList, projectWorkflowRemove } from './commands/project-workflow.js';
+import { defaultsApply } from './commands/defaults.js';
 
 const program = new Command();
 
@@ -434,6 +435,19 @@ refine.command('finalize <thread-id>')
     const config = loadConfig();
     const { storage, toolRegistry } = bootstrap(config);
     await refineFinalize({ storage, toolRegistry }, threadId);
+  });
+
+// Defaults (seed contexts)
+const defaults = program.command('defaults').description('Manage default contexts (knowledge, rules) shipped with Jarvis');
+
+defaults.command('apply')
+  .description('Apply default contexts to projects whose integrations match the manifest selectors')
+  .option('--project <id>', 'Apply only to this project (default: all projects)')
+  .option('--force', 'Overwrite existing entries that drift from the seed', false)
+  .action((opts: { project?: string; force?: boolean }) => {
+    const config = loadConfig();
+    const { storage } = bootstrap(config);
+    defaultsApply(storage, opts);
   });
 
 program.parse();
