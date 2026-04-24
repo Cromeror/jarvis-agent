@@ -1,0 +1,139 @@
+---
+description: Guiar al user para inicializar Jarvis en un proyecto — crear el proyecto en Jarvis, sincronizar el CLAUDE.md global y local, y dejarlo listo para usar tools MCP. Aplicar cuando el user pida "iniciar jarvis en este proyecto", "setup jarvis", "registrar proyecto en jarvis", "sync jarvis", "conectar proyecto con jarvis".
+alwaysApply: false
+---
+
+# Inicializar Jarvis en un proyecto
+
+Cuando el user pida inicializar Jarvis en un proyecto (variantes: "iniciar jarvis acá", "setup jarvis", "registrar este proyecto en jarvis", "conectar este repo con jarvis", "sync jarvis", "jarvis no me conoce este proyecto"), guialo por este flujo.
+
+## Contexto
+
+Jarvis tiene **tres capas de setup** que suelen confundirse:
+
+1. **Global de la máquina** (una vez por máquina): Jarvis instalado, MCP server registrado en Claude Code, CLAUDE.md global con catálogo de tools.
+2. **Proyecto registrado en Jarvis** (una vez por proyecto): fila en la DB de Jarvis con `id`, `name`, `sector`, `description`. Este `project_id` es la clave que usan todas las tools MCP.
+3. **CLAUDE.md local del proyecto** (una vez por proyecto): bloque de instrucciones sincronizado al `./CLAUDE.md` del repo, pinneando el `project_id` para que Claude Code / Cursor sepan qué proyecto usar sin preguntar.
+
+Las tools MCP de Jarvis (`mcp__jarvis__*`) funcionan desde que está el paso 1 + el proyecto creado en el paso 2. El paso 3 es para que el agente detecte automáticamente el `project_id` sin que el user lo repita.
+
+## Flujo paso a paso
+
+### Paso 0 — Pre-chequeo de instalación global
+
+Antes de arrancar preguntale al user:
+1. ¿Tenés Jarvis instalado? Verificá con `jarvis --version` (o `jarvis doctor` para un diagnóstico completo, incluye detección de drift en CLAUDE.md).
+2. ¿Ya corriste `jarvis setup` alguna vez en esta máquina? (inicializa data dir, DB, seed). Si es instalación nueva, hay que correrlo primero:
+   ```bash
+   jarvis setup
+   ```
+3. ¿Jarvis está registrado como MCP server en Claude Code? Verificá con `jarvis mcp status`. Si no, una vez por máquina:
+   ```bash
+   jarvis mcp install
+   ```
+   (Flags útiles: `-s user|local|project` para el scope — default `user`. `--skip-build` si ya está buildeado.)
+
+Si alguno falta, resolvélo antes de seguir.
+
+### Paso 1 — Datos que necesito del user
+
+Preguntale estos valores para crear el proyecto:
+
+1. **`project_id`** — identificador corto, kebab-case, estable. Va a ser la clave de todas las tools (`-p project_id=<id>`). Ejemplos reales: `lx`, `cash`, `pld-api`, `cm-front`. Sugerí algo basado en el nombre del repo si el user no tiene preferencia.
+2. **`name`** — nombre humano del proyecto (ej: "Cash", "PLD API").
+3. **`sector`** (opcional) — dominio/industria (ej: "fintech", "retail", "internal-tools"). Útil para que las reglas del proyecto tengan contexto.
+4. **`description`** (opcional) — una línea sobre qué hace el proyecto.
+
+**Antes de seguir**, corré `jarvis project list` para confirmar que el `project_id` elegido no exista ya. Si existe, preguntale al user si quiere reusarlo o elegir otro.
+
+### Paso 2 — Crear el proyecto en Jarvis
+
+Armá el comando con los datos del user:
+
+```bash
+jarvis project create <project_id> --name "<name>" --sector "<sector>" --description "<description>"
+```
+
+Ejemplo real:
+```bash
+jarvis project create cash --name "Cash" --sector "fintech" --description "API de pagos"
+```
+
+Ofrecé **dos opciones**:
+- **A) Que lo corra el user** — mostrale el comando exacto.
+- **B) Que lo corras vos** — ejecutalo vía terminal. **Confirmá los valores antes** — es escritura persistente en la DB de Jarvis.
+
+Verificá con `jarvis project show <project_id>` que haya quedado bien.
+
+### Paso 3 — Sincronizar CLAUDE.md global (una vez por máquina)
+
+Este paso ya debería estar hecho si el user corrió `jarvis mcp install` en el paso 0, pero confirmalo. El sync global escribe el catálogo de tools Jarvis al CLAUDE.md de user scope (`~/.claude/CLAUDE.md`):
+
+```bash
+jarvis mcp sync
+```
+
+Flags útiles:
+- `--check` — exit code 2 si hay drift, útil para CI/pre-commit.
+- `--dry-run` — muestra qué haría sin escribir.
+- `--force` — sobreescribe aunque haya drift.
+
+Resultado esperado: al abrir cualquier proyecto, Cursor / Claude Code ven el catálogo de tools Jarvis y saben qué pueden invocar.
+
+### Paso 4 — Sincronizar CLAUDE.md local del proyecto
+
+Este es el paso clave para que el agente detecte el `project_id` automáticamente. **Debe correrse desde la raíz del repo del proyecto**:
+
+```bash
+cd /ruta/al/proyecto
+jarvis mcp sync --project --project-id <project_id>
+```
+
+Qué hace:
+- Escribe/actualiza un bloque Jarvis en `./CLAUDE.md` del repo.
+- Pinnea el `project_id` dentro del bloque para que el agente sepa qué proyecto usar sin preguntar al user.
+- Incluye la lista de integraciones activas del proyecto (Jira, n8n, GitHub) — se actualiza cada vez que se vuelve a correr.
+
+Si `./CLAUDE.md` ya existe con otro contenido del user, Jarvis respeta eso e inyecta solo su bloque entre marcadores.
+
+### Paso 5 — Verificar todo
+
+Corré estos tres comandos para validar el stack completo:
+
+```bash
+jarvis doctor                              # chequea instalación + drift CLAUDE.md
+jarvis project show <project_id>           # confirma que el proyecto existe
+jarvis mcp status                          # confirma que el MCP server está registrado
+```
+
+Si todo OK, el user ya puede usar las tools desde Cursor / Claude Code.
+
+## Pasos siguientes típicos (ofrecelos al terminar)
+
+Ofrecé al user estos opcionales según lo que vaya a hacer con el proyecto:
+
+- **Agregar stack** (ayuda a que las tools de código generen en el lenguaje/framework correcto):
+  ```bash
+  jarvis project stack set <project_id>   # interactivo
+  ```
+- **Agregar reglas** (las inyecta `resolveRulesForTool` en todos los scaffolds):
+  ```bash
+  jarvis project rules add <project_id>   # interactivo
+  ```
+- **Conectar integraciones** según necesidad:
+  - Jira → ver regla `jarvis-jira-setup` (o `jarvis integration set <project_id> jira --site ... --email ...`)
+  - n8n → `jarvis integration set <project_id> n8n --url ... --api-key ...`
+  - GitHub → `jarvis integration set <project_id> github --repo ... --token ...`
+- **Commitear el `CLAUDE.md` actualizado** al repo para que el equipo lo comparta:
+  ```bash
+  git add CLAUDE.md && git commit -m "chore: sync Jarvis context block"
+  ```
+
+## Reglas duras
+
+1. **Nunca inventes un `project_id`** que ya exista — siempre `jarvis project list` primero. Si el user insiste en reusar uno existente, confirmá que entiende que va a compartir reglas/stack/integraciones con el proyecto previo.
+2. **`jarvis mcp sync --project` debe correrse desde la raíz del repo** — si se corre desde otro dir, escribe en el CLAUDE.md equivocado. Verificá con `pwd` antes.
+3. **No confundas los dos CLAUDE.md**: `~/.claude/CLAUDE.md` (global, catálogo de tools) vs `./CLAUDE.md` (proyecto, pin de `project_id`). Son roles distintos.
+4. Si `jarvis doctor` reporta drift, corré `jarvis mcp sync` (global) y/o `jarvis mcp sync --project --project-id <id>` (local) para resolverlo — no edites los CLAUDE.md a mano.
+5. Si el user corre `jarvis mcp sync --project` sin `--project-id`, Jarvis intenta auto-detectar desde `./CLAUDE.md` si ya hay un pin previo. Primera vez → exigí el `--project-id`.
+6. Si vas a ejecutar `jarvis project create` vos mismo, **confirmá los valores antes** — es acción persistente y el `project_id` no se puede renombrar fácilmente después.
