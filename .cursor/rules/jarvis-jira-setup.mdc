@@ -1,0 +1,81 @@
+---
+description: Guiar al user para configurar la integración Jira en Jarvis. Aplicar cuando pida "configurar jira", "conectar jira con jarvis", "setup jira", "integrar jira", o cuando las tools jira_* fallen por falta de integración.
+alwaysApply: false
+---
+
+# Configurar integración Jira en Jarvis
+
+Cuando el user pida configurar Jira en Jarvis (variantes: "configurar jira", "conectar jira con jarvis", "setup jira", "integrar jira", "jarvis no ve mis tickets", o mencione que quiere usar las tools `jira_*` y no están configuradas), guialo por este flujo.
+
+## Contexto
+
+Jarvis **no guarda credenciales** de Jira — solo persiste `{site, email}` en su DB. La autenticación real vive en **ACLI (Atlassian CLI)**, que Jarvis invoca por debajo. Por eso el setup tiene dos capas: autenticar ACLI (una vez por site) + registrar la integración en Jarvis (una vez por proyecto).
+
+## Flujo paso a paso
+
+### Paso 0 — Pre-chequeo
+
+Antes de arrancar, preguntale al user:
+1. ¿Tenés ACLI instalado? (corré `acli --version` en la terminal para confirmar). Si no:
+   - macOS/Linux con Homebrew: `brew tap atlassian/acli && brew install acli`
+   - Otras plataformas: https://developer.atlassian.com/cloud/acli/guides/install/
+2. ¿Ya tenés un API token de Atlassian? Si no, generá uno en https://id.atlassian.com/manage-profile/security/api-tokens → "Create API token" → copialo (se muestra una sola vez).
+
+### Paso 1 — Datos que necesito del user
+
+Preguntale estos 4 valores (uno por uno o todos juntos, como le quede mejor):
+
+1. **`project_id` de Jarvis** — el ID del proyecto en Jarvis donde va a vivir la integración (ej: `lx`, `cash`, `pld-api`). Si no lo sabe, sugerile:
+   - Buscá en el `CLAUDE.md` del proyecto.
+   - O corré `jarvis project list` para verlos todos.
+2. **Site de Atlassian** — dominio sin `https://` (ej: `miorg.atlassian.net`).
+3. **Email** — el de su cuenta Atlassian.
+4. **API token** — el generado en el paso 0.2. **Nunca lo muestres en el chat ni lo loguees** — es secreto; pedile que lo tenga a mano solo para el comando de ACLI.
+
+### Paso 2 — Autenticar ACLI (una vez por site)
+
+Armá y mostrale este comando con los valores del user:
+
+```bash
+acli jira auth login --site <SITE> --email <EMAIL> --token <API_TOKEN>
+```
+
+Aclará al user:
+- Reemplazá `<API_TOKEN>` con el token real.
+- El token se guarda en `~/.acli/` (Jarvis no lo ve).
+- Si tiene múltiples sites de Atlassian (cliente A, cliente B, etc.), repetí este comando para cada uno.
+
+Después del login, probar:
+```bash
+acli jira workitem view <KEY-1> --json
+```
+(reemplazando `<KEY-1>` por cualquier ticket real). Si devuelve JSON, ACLI está OK.
+
+### Paso 3 — Registrar la integración en Jarvis
+
+Armá el comando final con los datos del user y ofrecé **dos opciones**:
+
+**A) Que lo corra el user** — mostrale el comando exacto:
+```bash
+jarvis integration set <PROJECT_ID> jira --site <SITE> --email <EMAIL>
+```
+
+**B) Que lo corras vos** — si el user prefiere que Cursor lo ejecute, corré el mismo comando vía terminal del proyecto. **Antes de ejecutar, confirmá con el user** que los valores son correctos — es un comando con efecto persistente en la DB de Jarvis.
+
+### Paso 4 — Verificar
+
+Ofrecé correr estos dos comandos para validar:
+```bash
+jarvis integration list <PROJECT_ID>
+jarvis tool run jira_get_ticket -p ticket_id=<KEY-1> -p project_id=<PROJECT_ID>
+```
+Si el segundo devuelve un ticket en TOON format, la integración está lista.
+
+## Reglas duras
+
+1. **NO mostrés el API token en la respuesta ni en ningún comando que vayas a ejecutar vos mismo si el user lo compartió en el chat** — copialo solo al comando local de ACLI y avisale que después borre el mensaje. Idealmente, pedile que corra `acli jira auth login` él mismo, no vos.
+2. **Nunca inventes el `project_id`** — si el user no lo sabe, corré `jarvis project list` o pedile que mire su `CLAUDE.md`.
+3. **Nunca inventes el `site`** — si no sabe, decile que mire la URL cuando entra a Jira (lo que está antes de `/jira/...`).
+4. Si el user quiere que ejecutes `jarvis integration set` vos mismo, **confirmá los valores antes** — es acción persistente.
+5. Si `jarvis integration set` falla, revisá en orden: (a) Jarvis instalado y en PATH, (b) `project_id` existe (`jarvis project list`), (c) flags bien escritos (`--site`, `--email`).
+6. Si `jira_get_ticket` falla después del setup, el problema está en ACLI, no en Jarvis — pedí al user correr `acli jira workitem view <KEY> --json` directamente para aislar.
