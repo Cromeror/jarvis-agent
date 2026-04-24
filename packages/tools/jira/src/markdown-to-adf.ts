@@ -274,13 +274,28 @@ function splitTableRow(line: string): TableCellParsed[] {
   if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
   if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
 
-  // Split on `|` not preceded by `\`
+  // Split on `|` not preceded by `\` and not inside {…} custom syntax or `…` inline code.
+  // This protects {status:green|OK}, {color:#hex}text{/color}, etc.
   const parts: string[] = [];
   let current = '';
+  let braceDepth = 0;
+  let inCode = false;
   for (let i = 0; i < trimmed.length; i++) {
     const ch = trimmed[i];
     const prev = trimmed[i - 1];
-    if (ch === '|' && prev !== '\\') {
+    if (ch === '`' && prev !== '\\') {
+      inCode = !inCode;
+      current += ch;
+      continue;
+    }
+    if (!inCode) {
+      if (ch === '{') {
+        braceDepth++;
+      } else if (ch === '}' && braceDepth > 0) {
+        braceDepth--;
+      }
+    }
+    if (ch === '|' && prev !== '\\' && braceDepth === 0 && !inCode) {
       parts.push(current);
       current = '';
     } else {
