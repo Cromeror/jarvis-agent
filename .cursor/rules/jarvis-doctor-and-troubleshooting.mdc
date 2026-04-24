@@ -1,0 +1,134 @@
+---
+description: Runbook para diagnosticar y reparar fallas de Jarvis — desde "la tool MCP no responde" hasta "jarvis doctor reporta errores". Aplicar cuando el user reporte errores, fallos de tools jarvis_*/jira_*/n8n_*, drift de CLAUDE.md, o pida "revisar instalación".
+alwaysApply: false
+---
+
+# Runbook: diagnosticar y reparar Jarvis
+
+Cuando el user reporte que algo falla ("la tool no responde", "Cursor no ve Jarvis", "me tira error al invocar `jira_get_ticket`", "¿está todo bien instalado?"), seguí este runbook en orden. **Siempre empezá con `jarvis doctor`** — hace la mayoría del diagnóstico de entrada y te ahorra preguntas.
+
+## Comando #1 siempre: `jarvis doctor`
+
+```bash
+jarvis doctor
+```
+
+Qué chequea (en este orden, con ícono ✓ / ⚠ / ✗):
+1. **Node.js** — requiere >= 20. Si falla → actualizar Node.
+2. **Database** — existe `~/.jarvis/jarvis.db`. Si falla → `jarvis setup`.
+3. **Cognitive Base** — existe `~/.jarvis/cognition.md`. Si falta → `jarvis base edit`.
+4. **AI Provider** — hay provider activo. Si falla → `jarvis ai setup`.
+5. **Gateway** — verifica el gateway local.
+6. **n8n** — conectividad a n8n si hay integración configurada.
+7. **n8n required workflows** — workflows que las tools esperan (hoy: `jira-analyze-ticket`).
+8. **ACLI** — `acli --version` funciona. Si falla → instalar ACLI.
+9. **Docker** — docker disponible.
+10. **MCP instructions / CLAUDE.md drift** — el bloque Jarvis en `~/.claude/CLAUDE.md` está sincronizado.
+
+**Exit code**: 0 si todo OK, 1 si hay errores. Perfecto para CI.
+
+Leé el output entero — cada check fallado incluye un `hint` con el comando exacto para arreglarlo.
+
+## Árbol de decisión por síntoma
+
+### A) "Cursor / Claude Code no ve las tools de Jarvis"
+
+1. `jarvis mcp status` — ¿está registrado el MCP server?
+   - Si no → `jarvis mcp install` (scope por defecto `user`, o `-s project` para pinnearlo al repo).
+   - Si sí pero igual no aparece → reiniciar Cursor / Claude Code (no siempre detecta registros nuevos sin restart).
+2. `jarvis doctor` → chequeá el check "MCP instructions / CLAUDE.md drift".
+   - Si hay drift → `jarvis mcp sync` (global). Después `jarvis mcp sync --project --project-id <id>` en el repo.
+3. Verificá la ruta del binario: `which jarvis`. Si vive en un path no estándar, `jarvis mcp install` puede haberlo registrado con otra ruta — `jarvis mcp update` la reescribe.
+
+### B) "La tool `jarvis_*` tira error"
+
+Error crudo → mirá el mensaje, suele ser explícito. Casos comunes:
+
+- **"Unknown tool: ..."** → la tool no existe o está mal escrita. Listá disponibles con `jarvis_run_tool` sin args válidos, o consultá el catálogo en `~/.claude/CLAUDE.md`.
+- **"Project not found"** → `project_id` incorrecto. `jarvis_list_projects` para confirmar.
+- **Errores de integración** (Jira/n8n) → saltá al árbol C o D.
+
+### C) "Falla una tool `jira_*`"
+
+1. ¿Hay integración Jira en el proyecto? → `jarvis integration list <project_id>`. Si no → regla `jarvis-jira-setup`.
+2. ¿ACLI funciona por sí solo? → `acli jira workitem view <KEY> --json`. Si falla → el problema está en ACLI, no en Jarvis:
+   - `acli --version` (¿instalado?)
+   - `acli jira auth status` (¿sesión activa?)
+   - Re-login: `acli jira auth login --site ... --email ... --token ...`
+3. ¿Site y email coinciden entre la integración Jarvis y la sesión ACLI? → `jarvis integration list <project_id>` y compará.
+4. Timeout: las tools Jira tienen timeout de 30s. Si una query JQL es muy grande, achicala con filtros (`project_key`, `status`).
+
+### D) "Falla una tool `n8n_*`"
+
+1. ¿Hay integración n8n en el proyecto? → `jarvis integration list <project_id>`.
+2. ¿La URL de n8n es accesible? → `curl <url>/healthz` o abrila en browser.
+3. ¿El API key es válido? → probá en la UI de n8n o con un `curl` autenticado.
+4. `jarvis doctor` — el check de n8n y workflows requeridos te dice si falta algún workflow que las tools usan.
+
+### E) "El scaffold de una tool de refinamiento sale genérico"
+
+Ver regla `jarvis-rules-and-stack` — árbol de decisión completo ahí. Resumen: probablemente falta reglas o stack configurado, o las reglas están en la categoría equivocada.
+
+### F) "`jarvis` command not found"
+
+1. `which jarvis` — no está en PATH.
+2. Si instalaste con pnpm/npm global: verificá que el dir global esté en PATH (`npm config get prefix` + `/bin`).
+3. Reinstalar: seguí el README del repo Jarvis-agent.
+
+### G) "Drift en CLAUDE.md"
+
+`jarvis doctor` lo reporta. También podés forzar el check:
+```bash
+jarvis mcp sync --check           # exit 2 si hay drift
+jarvis mcp sync --dry-run         # muestra qué cambiaría sin escribir
+jarvis mcp sync                   # aplica (user scope)
+jarvis mcp sync --project --project-id <id>   # aplica al repo actual
+jarvis mcp sync --force           # sobreescribe ignorando drift
+```
+
+**Nunca editar los CLAUDE.md a mano** para "resolver" drift — el próximo sync lo va a reescribir. Si el user modificó algo dentro del bloque Jarvis, usá `--force` (pierde los cambios) o movelo fuera del bloque (entre los marcadores custom que respeta Jarvis).
+
+### H) "Reinstalar de cero"
+
+Orden destructivo (**confirmá con el user antes, borra datos locales de Jarvis**):
+```bash
+jarvis mcp uninstall              # saca el MCP server
+rm -rf ~/.jarvis                  # borra DB, cognition, config
+# reinstalar el binario si hace falta
+jarvis setup                      # rearma data dir, DB, seed
+jarvis mcp install                # registra MCP server
+jarvis mcp sync                   # sync global CLAUDE.md
+# recrear proyectos y re-sync local por cada uno
+```
+
+## Comandos de inspección rápida
+
+| Qué ver | Comando |
+|---------|---------|
+| Salud general | `jarvis doctor` |
+| Proyectos registrados | `jarvis project list` |
+| Contexto completo de un proyecto | `jarvis project show <id>` o `jarvis_project_context` (MCP) |
+| Integraciones de un proyecto | `jarvis integration list <id>` |
+| Reglas de un proyecto | `jarvis project rules list <id>` |
+| Stack de un proyecto | `jarvis project stack list <id>` |
+| Estado del MCP server | `jarvis mcp status` |
+| Drift de CLAUDE.md | `jarvis mcp sync --check` (exit 2 = drift) |
+| Sesiones recientes | `jarvis sessions` |
+| AI provider activo | `jarvis ai status` |
+| Versión | `jarvis --version` |
+
+## Logs y archivos clave
+
+- DB: `~/.jarvis/jarvis.db` (SQLite — podés abrirla con `sqlite3` para inspección avanzada).
+- Config: `~/.jarvis/config.json`.
+- Cognition base: `~/.jarvis/cognition.md`.
+- CLAUDE.md global: `~/.claude/CLAUDE.md` (bloque Jarvis entre marcadores).
+- CLAUDE.md de proyecto: `./CLAUDE.md` en el repo (si se corrió `jarvis mcp sync --project`).
+
+## Reglas duras
+
+1. **`jarvis doctor` primero, siempre** — no gastes rondas de preguntas al user hasta ver su output.
+2. **No edites los CLAUDE.md a mano** — usá `jarvis mcp sync` (con `--force` si hace falta).
+3. **Para acciones destructivas** (`jarvis mcp uninstall`, `rm -rf ~/.jarvis`, re-setup) **pedí confirmación explícita al user** — borran estado persistente (DB con proyectos, reglas, integraciones).
+4. Si el error es de ACLI/n8n (no de Jarvis directo), **aisalo corriendo el comando del backend solo** — separa rápido si el bug es de Jarvis o del sistema externo.
+5. **No inventes hints**: si `jarvis doctor` no dice cómo arreglar algo, reportá eso al user en vez de proponer comandos al azar. Los hints oficiales están en el output del doctor.

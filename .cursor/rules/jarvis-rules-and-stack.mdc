@@ -1,0 +1,108 @@
+---
+description: Mantener el contexto del proyecto en Jarvis — reglas, stack y conocimiento — para que las tools MCP (refine_*, code_*, check_*) devuelvan scaffolds personalizados y no genéricos. Aplicar cuando el user pida "agregar una regla", "configurar el stack", "por qué el scaffold sale genérico", o cuando el output de una tool ignore una convención del proyecto.
+alwaysApply: false
+---
+
+# Mantener reglas, stack y contexto del proyecto en Jarvis
+
+Cuando el user pida agregar reglas, configurar stack, o se queje de que un scaffold de Jarvis sale genérico/ignora convenciones, usá esta guía. El contexto del proyecto es lo que hace que las tools MCP (`refine_*`, `code_*`, `check_*`, `generate_*`, `identify_*`) devuelvan resultados útiles en vez de prompts vacíos.
+
+## Cómo Jarvis inyecta contexto en los scaffolds
+
+Todas las tools de refinamiento y código llaman a `resolveRulesForTool(storage, projectId, toolName, fallbackCategory)` que tiene **cascada de fallback**:
+
+1. **Reglas específicas de la tool** — `WHERE tool_name = 'refine_requirements'` (o el nombre de la tool).
+2. **Reglas de la categoría fallback** — `WHERE category = 'refinement'` (o la categoría que mande la tool).
+3. **Todas las reglas del proyecto** — `WHERE project_id = <id>` sin filtro.
+4. **String vacío** — si no hay ninguna regla registrada.
+
+**Gotcha crítico**: no hay forma de saber desde afuera qué nivel se usó. Si una regla que "tendría que aplicar" no aparece en el scaffold, probablemente está en el nivel equivocado (ej: registrada sin `tool_name`, y hay reglas específicas de tool que ganan).
+
+Además, `code_*` tools también inyectan el **stack** del proyecto (`storage.stack.list(projectId)`) — sin stack, los scaffolds no saben en qué lenguaje/framework generar.
+
+## Categorías de reglas convencionales
+
+El CLI sugiere estas categorías (son strings libres, no un enum):
+
+- `code_conventions` — naming, formatting, patrones, anti-patrones del código.
+- `refinement` — cómo refinar requerimientos en este proyecto (ej: "siempre incluí criterios Gherkin").
+- `definition_of_ready` — qué hace que un ticket esté listo para dev.
+- `git` — commits, branches, PRs.
+- Otras libres: `testing`, `security`, `review`, etc.
+
+Elegí la categoría que describe **qué tipo de regla es**, no la tool que la va a usar. La tool-specific se usa para reglas muy puntuales que solo aplican a una tool.
+
+## Flujo: agregar reglas
+
+### Opción A — interactivo (recomendado para reglas nuevas)
+
+```bash
+jarvis project rules add <project_id>
+```
+Te pide `category` → `rule` (texto) → `priority` (orden descendente, default 0). Guardá la priority alta (ej: 10, 100) para reglas críticas que quieras ver primero en los scaffolds.
+
+### Opción B — listar y auditar
+
+```bash
+jarvis project rules list <project_id>
+jarvis project rules list <project_id> -c code_conventions    # filtra por categoría
+```
+Agrupa por categoría y muestra el `id` de cada regla (útil para el remove).
+
+### Opción C — remover
+
+```bash
+jarvis project rules remove <rule_id>
+```
+
+**Regla tool-specific**: no hay flag en el CLI interactivo para setear `tool_name`. Si querés una regla que solo aplique a `code_generate` y no a `code_review`, tenés que insertarla directamente en la DB o extender el CLI. Para el 95% de los casos, usá categorías y dejá `tool_name` NULL.
+
+## Flujo: configurar stack
+
+```bash
+jarvis project stack set <project_id>       # interactivo: layer + value + notes
+jarvis project stack list <project_id>
+jarvis project stack remove <stack_id>
+```
+
+Layers típicas: `backend`, `frontend`, `database`, `infra`, `testing`, `package-manager`. Valores: `TypeScript`, `React`, `PostgreSQL`, `Docker`, `pnpm`, etc. Las `notes` son opcionales y ayudan a los `code_*` tools a saber convenciones específicas ("usar Zod v3, no v4").
+
+**Impacto concreto**: `code_generate` sin stack devuelve un prompt que le pide al LLM "usar el lenguaje apropiado" — genérico. Con stack, el prompt dice "generar TypeScript usando Zod v3 y pnpm" — específico.
+
+## Flujo: verificar contexto actual
+
+Antes de agregar reglas/stack, siempre inspeccioná qué ya hay:
+
+```bash
+# MCP (desde Cursor/Claude Code)
+jarvis_project_context { project_id: "<id>" }
+
+# CLI
+jarvis project show <project_id>
+jarvis project rules list <project_id>
+jarvis project stack list <project_id>
+```
+
+`jarvis_project_context` devuelve `{project, stack[], rules[], integrations[], knowledge[]}` — es la fuente más completa para ver qué "sabe" Jarvis sobre el proyecto.
+
+## Diagnóstico: "el scaffold sale genérico / ignora X"
+
+Árbol de decisión cuando una regla esperada no aparece en el output:
+
+1. **¿Está registrada?** → `jarvis project rules list <id>` — confirmá que existe.
+2. **¿Está en la categoría correcta?** → si la regla de commits está con `category: refinement`, la cascada no la va a encontrar cuando se use `code_generate_commit_message` (fallback category `code_conventions` o sin filtro). Movela a la categoría adecuada (remove + add).
+3. **¿Hay reglas tool-specific que la están tapando?** → si hay reglas con `tool_name = 'refine_requirements'`, las reglas generales del proyecto no se consultan para esa tool (la cascada frena en el nivel 1). Agregá la regla general también como tool-specific, o eliminá la tool-specific.
+4. **¿El `project_id` es el correcto?** → verificá que estás pasando el ID del proyecto actual a la tool (ver orden de búsqueda en las otras reglas Jarvis).
+5. **¿Es un problema de stack, no de rules?** → los `code_*` tools dependen de stack; si está vacío, agregá con `jarvis project stack set <id>`.
+
+## Conocimiento del proyecto (`knowledge`)
+
+`jarvis_project_context` también devuelve `knowledge[]` (tabla `project_knowledge`) — textos largos con contexto (ej: arquitectura, glosario de dominio). Hoy no hay CLI para editarlos fácilmente; si el user quiere agregar contexto extenso, sugerir que lo ponga como varias reglas en una categoría tipo `architecture` o `domain`, hasta que haya comando dedicado.
+
+## Reglas duras
+
+1. **Antes de agregar una regla nueva, chequeá si ya existe** — `jarvis project rules list <id> -c <categoría>`. Evitá duplicados (la DB deduplica pero solo a nivel `(project_id, category, rule, priority, tool_name)`).
+2. **Si el user pide "que Jarvis use X convención", preguntá la categoría** — o sugerila según la descripción. No agregues reglas sin categoría clara.
+3. **No inventes stacks** — preguntá qué lenguaje/framework usa el proyecto antes de correr `stack set`.
+4. **Si vas a ejecutar `jarvis project rules add` o `stack set` vos mismo, son interactivos** — no se pueden automatizar fácilmente desde shell sin input. Ofrecé al user los inputs armados y pedile que los corra él, o usá `expect`/pipe con cuidado.
+5. **Re-sync el CLAUDE.md después de cambios grandes de contexto** — `jarvis mcp sync --project --project-id <id>` para que el bloque local refleje las integraciones actualizadas (no incluye reglas/stack, pero sí integraciones).
